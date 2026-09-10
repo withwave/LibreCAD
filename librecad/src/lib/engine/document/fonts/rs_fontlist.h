@@ -67,6 +67,8 @@ private:
     static RS_FontList* uniqueInstance;
     //! m_fonts in the graphic
     std::vector<std::unique_ptr<RS_Font>> m_fonts;
+    //! Last-resort CAD font, independent of installed support files.
+    std::unique_ptr<RS_Font> m_fallbackFont;
 };
 
 #endif

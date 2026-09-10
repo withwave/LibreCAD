@@ -9,6 +9,8 @@
 
 # Apple generated directories
 build/
+# Local drawing previews and exported verification documents
+/output/
 LibreCAD.app/
 LibreCAD.pbproj/
 LibreCAD.dmg

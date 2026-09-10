@@ -144,19 +144,19 @@ class DRW_Dimstyle : public DRW_TableEntry {
     SETOBJFRIENDS
 public:
     DRW_Dimstyle() { reset();}
-    ~DRW_Dimstyle() {
-        for (auto& kv : vars) delete kv.second;
-    }
+    ~DRW_Dimstyle() = default;
 
-    void add(const std::string& key, int code, int value) { vars[key] = new DRW_Variant(code, value); }
-    void add(const std::string& key, int code, double value) { vars[key] = new DRW_Variant(code, value); }
-    void add(const std::string& key, int code, std::string value) { vars[key] = new DRW_Variant(code, UTF8STRING(value)); }
+    void add(const std::string& key, int code, int value) { vars[key] = std::make_shared<DRW_Variant>(code, value); }
+    void add(const std::string& key, int code, double value) { vars[key] = std::make_shared<DRW_Variant>(code, value); }
+    void add(const std::string& key, int code, std::string value) { vars[key] = std::make_shared<DRW_Variant>(code, UTF8STRING(value)); }
     DRW_Variant* get(const std::string& key) const {
         auto it = vars.find(key);
-        return (it != vars.end()) ? it->second : nullptr;
+        return (it != vars.end()) ? it->second.get() : nullptr;
     }
 
     void reset(){
+        vars.clear();
+        referenceHandles.clear();
         tType = DRW::DIMSTYLE;
         dimasz = dimtxt = dimexe = 0.18;
         dimexo = 0.0625;
@@ -256,7 +256,8 @@ public:
     UTF8STRING dimldrblk;     /*!< code 341 V2000+ */
     int dimlwd;               /*!< code 371 V2000+ */
     int dimlwe;               /*!< code 372 V2000+ */
-    std::map<std::string, DRW_Variant*> vars; /*!< extra/override variables written after standard fields */
+    std::map<std::string, std::shared_ptr<DRW_Variant>> vars; /*!< extra/override variables written after standard fields */
+    std::map<int, duint32> referenceHandles; // DWG handles resolved after all tables are read
 };
 
 

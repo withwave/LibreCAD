@@ -54,6 +54,17 @@ QG_PrintPreviewOptions::QG_PrintPreviewOptions()
     , ui(new Ui::Ui_PrintPreviewOptions{})
 {
     ui->setupUi(this);
+    auto printerArea = new QToolButton(this);
+    printerArea->setObjectName("printerArea");
+    printerArea->setText(tr("Printer area"));
+    printerArea->setToolTip(tr("Select a printer and apply its minimum margins. Larger drawing margins are preserved."));
+    ui->horizontalLayout->insertWidget(3, printerArea);
+    connect(printerArea, &QToolButton::clicked, this, [this]() {
+        if (m_action) {
+            m_action->invokePrinterDialog();
+            updateScaleBox(m_action->getScale());
+        }
+    });
 
     // Connect ui actions
     connect(ui->cFixed, &QCheckBox::clicked, this, &QG_PrintPreviewOptions::onScaleFixedClicked);
@@ -249,12 +260,14 @@ void QG_PrintPreviewOptions::onPortraitClicked(){
     bool portrait = ui->tbPortait->isChecked();
     setPaperOrientation(portrait);
     m_action->setPaperOrientation(portrait);
+    updateScaleBox(m_action->getScale());
 }
 
 void QG_PrintPreviewOptions::onLandscapeClicked(){
     bool portrait = !ui->tbLandscape->isChecked();
     setPaperOrientation(portrait);
     m_action->setPaperOrientation(portrait);
+    updateScaleBox(m_action->getScale());
 }
 
 void QG_PrintPreviewOptions::setPaperOrientation(bool isPortait){

@@ -36,7 +36,7 @@ public:
     explicit dwgRW(const char* name);
     ~dwgRW();
     //read: return true if all ok
-    bool read(DRW_Interface *interface_, bool ext);
+    bool read(DRW_Interface *interface_, bool ext, const std::string &codePage = {});
 
     /// Write the in-memory model (driven via DRW_Interface callbacks)
     /// out to the file named at construction.  v1 supports `DRW::AC1015`

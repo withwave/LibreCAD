@@ -4225,6 +4225,32 @@
        <string>&amp;Defaults</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout_3">
+       <item row="3" column="1">
+        <widget class="QGroupBox" name="groupTextEncoding">
+         <property name="title">
+          <string>Drawing text encoding</string>
+         </property>
+         <layout class="QVBoxLayout" name="layoutTextEncoding">
+          <item>
+           <widget class="QComboBox" name="cbLegacyTextEncoding">
+            <property name="toolTip">
+             <string>Encoding used to open DXF/DWG files older than AutoCAD 2007. Auto uses the file's code page. Unicode drawings keep their original encoding.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="labelTextEncodingReopen">
+            <property name="text">
+             <string>Reopen the drawing after changing this setting.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
        <item row="1" column="1">
         <widget class="QGroupBox" name="groupBox_5">
          <property name="title">

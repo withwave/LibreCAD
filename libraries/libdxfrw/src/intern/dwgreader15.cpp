@@ -38,6 +38,8 @@ bool dwgReader15::readMetaData() {
         decoder.setCodePage("ANSI_1252", false);
     if (cp == 30)
         decoder.setCodePage("ANSI_1252", false);
+    if (cp == 40 || cp == 25) // ANSI_949 / Korean code page
+        decoder.setCodePage("ANSI_949", false);
     return true;
 }
 
@@ -195,4 +197,3 @@ bool dwgReader15::readDwgBlocks(DRW_Interface& intfa) {
     ret = dwgReader::readDwgBlocks(intfa, fileBuf.get());
     return ret;
 }
-

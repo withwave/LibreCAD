@@ -20013,6 +20013,30 @@ This recursively modifies all entities of the Block itself.</source>
  <context>
   <name>QG_DlgOptionsGeneral</name>
   <message>
+   <source>Drawing text encoding</source>
+   <translation>도면 문자 인코딩</translation>
+  </message>
+  <message>
+   <source>Auto (file code page)</source>
+   <translation>자동 (파일의 코드 페이지)</translation>
+  </message>
+  <message>
+   <source>CP949 (Korean)</source>
+   <translation>CP949 (한국어)</translation>
+  </message>
+  <message>
+   <source>UTF-8</source>
+   <translation>UTF-8</translation>
+  </message>
+  <message>
+   <source>Reopen the drawing after changing this setting.</source>
+   <translation>설정을 변경한 후 도면을 다시 여세요.</translation>
+  </message>
+  <message>
+   <source>Encoding used to open DXF/DWG files older than AutoCAD 2007. Auto uses the file's code page. Unicode drawings keep their original encoding.</source>
+   <translation>AutoCAD 2007 이전 DXF/DWG 파일을 읽을 때 사용할 문자 인코딩입니다. 자동은 파일의 코드 페이지를 사용합니다. 유니코드 도면은 원래 인코딩을 유지합니다.</translation>
+  </message>
+  <message>
    <location filename="../src/ui/dialogs/settings/options_general/qg_dlgoptionsgeneral.cpp" line="941"/>
    <source>Preferences</source>
    <translation>옵션 정보</translation>
@@ -23989,7 +24013,11 @@ p, li { white-space: pre-wrap; }
    <source>Paper scale factor smaller than min print ratio</source>
    <translation>최소 인쇄 비율보다 작음</translation>
   </message>
- </context>
+
+    <message><source>Printer area</source><translation>프린터 영역</translation></message>
+
+    <message><source>Select a printer and apply its minimum margins. Larger drawing margins are preserved.</source><translation>프린터를 선택하고 최소 여백을 적용합니다. 도면의 여백이 더 크면 유지합니다.</translation></message>
+</context>
  <context>
   <name>QG_RecentFiles</name>
   <message>
@@ -28637,7 +28665,19 @@ Do you want to replace it?</source>
    <source>[Override]</source>
    <translation>[Override] [자산]</translation>
   </message>
- </context>
+
+    <message><source>Printer area</source><translation>프린터 영역</translation></message>
+
+    <message><source>No printers are available. Drawing margins will be used for PDF export.</source><translation>사용 가능한 프린터가 없습니다. PDF에는 도면의 여백이 적용됩니다.</translation></message>
+
+    <message><source>Printer (minimum margins are applied to the preview):</source><translation>프린터 선택 (최소 여백을 미리보기에 적용):</translation></message>
+
+    <message><source>Paper settings</source><translation>용지 설정</translation></message>
+
+    <message><source>The printer paper size or printable area differs from the drawing.</source><translation>프린터의 용지 크기 또는 인쇄 영역이 도면 설정과 다릅니다.</translation></message>
+
+    <message><source>Apply the printer settings and return to preview? Check the scale and position before printing again.</source><translation>프린터 설정을 적용하시겠습니까? 적용 후 미리보기에서 축척과 위치를 확인하고 다시 인쇄하세요.</translation></message>
+</context>
  <context>
   <name>RS_ActionBlocksCreate</name>
   <message>

@@ -32,6 +32,7 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QNativeGestureEvent>
 #include <QPoint>
 #include <QPointingDevice>
@@ -545,7 +546,10 @@ bool QG_GraphicView::invokeContextMenuForMouseEvent(QMouseEvent* e) {
     bool result = false;
     RS_Vector clickPos;
     RS_Entity* entity = catchContextEntity(e, clickPos);
-    auto contextMenu = QC_ApplicationWindow::getAppWindow()->createGraphicViewContentMenu(e, this, entity, clickPos);
+    // Popup menus use WA_DeleteOnClose. An action can open a modal dialog
+    // (e.g. PDF export), whose event loop deletes the closed popup before
+    // exec() returns. Its parent view can also be destroyed by an action.
+    QPointer<QMenu> contextMenu = QC_ApplicationWindow::getAppWindow()->createGraphicViewContentMenu(e, this, entity, clickPos);
     if (contextMenu != nullptr) {
         if (!contextMenu->isEmpty()) {
             auto actions = contextMenu->actions();
@@ -559,7 +563,7 @@ bool QG_GraphicView::invokeContextMenuForMouseEvent(QMouseEvent* e) {
                 result = true;
             }
         }
-        delete contextMenu;
+        delete contextMenu.data();
     }
     return result;
 }

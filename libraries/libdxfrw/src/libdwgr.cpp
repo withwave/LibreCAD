@@ -134,7 +134,7 @@ bool dwgRW::testReader(){
 }
 
 /*start reading dwg file header and, if can read it, continue reading all*/
-bool dwgRW::read(DRW_Interface *interface_, bool ext){
+bool dwgRW::read(DRW_Interface *interface_, bool ext, const std::string &codePage){
     bool isOk = false;
     applyExt = ext;
     iface = interface_;
@@ -146,6 +146,7 @@ bool dwgRW::read(DRW_Interface *interface_, bool ext){
     if (!isOk)
         return false;
 
+    reader->setReadCodePage(codePage);
     isOk = reader->readMetaData();
     if (isOk) {
         isOk = reader->readFileHeader();
@@ -497,6 +498,15 @@ bool dwgRW::processDwg() {
 
     for (auto it=reader->dimstylemap.begin(); it!=reader->dimstylemap.end(); ++it) {
         DRW_Dimstyle *ly = it->second;
+        for (const auto& reference : ly->referenceHandles) {
+            const int code = reference.first;
+            const char* key = code == 340 ? "$DIMTXSTY" : code == 341 ? "$DIMLDRBLK"
+                : code == 342 ? "$DIMBLK" : code == 343 ? "$DIMBLK1" : code == 344 ? "$DIMBLK2"
+                : code == 345 ? "$DIMLTYPE" : code == 346 ? "$DIMLTEX1" : "$DIMLTEX2";
+            auto table = code == 340 ? DRW::STYLE : code >= 345 ? DRW::LTYPE : DRW::BLOCK_RECORD;
+            auto name = reader->findTableName(table, reference.second);
+            if (!name.empty()) ly->add(key, code, name);
+        }
         iface->addDimStyle(const_cast<DRW_Dimstyle&>(*ly));
     }
 

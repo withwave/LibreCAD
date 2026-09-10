@@ -287,6 +287,7 @@ INCLUDEPATH += \
 RESOURCES += ../res/arrows/arrows.qrc
 RESOURCES += ../res/controls/controls.qrc
 RESOURCES += ../res/dxf/dxf.qrc
+RESOURCES += ../res/fonts/fallback_fonts.qrc
 RESOURCES += ../res/gdt/gdt.qrc
 RESOURCES += ../res/icons/icons.qrc
 RESOURCES += ../res/images/images.qrc

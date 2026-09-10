@@ -1571,6 +1571,7 @@ set(MUPARSER_SOURCES
 qt_add_library(librecad_lib STATIC
 	${MUPARSER_SOURCES}
 	${SHARED_SOURCES}
+    librecad/res/fonts/fallback_fonts.qrc
 )
 target_compile_definitions(librecad_lib PRIVATE
     DWGSUPPORT
@@ -1724,6 +1725,7 @@ if(BUILD_TESTS)
         librecad/src/lib/engine/document/entities/tests/rs_hatch_tests.cpp
         librecad/src/lib/engine/document/entities/tests/lc_textbidi_tests.cpp
         librecad/src/lib/engine/document/entities/tests/rs_mtext_bidi_tests.cpp
+        librecad/src/lib/engine/document/entities/tests/rs_font_fallback_tests.cpp
         librecad/src/lib/engine/document/entities/tests/rs_text_bidi_tests.cpp
         librecad/src/lib/math/tests/rs_math_tests.cpp
         librecad/src/lib/math/tests/lc_quadratic_tests.cpp
@@ -1733,6 +1735,8 @@ if(BUILD_TESTS)
         librecad/src/lib/filters/tests/dwg_smoke_tests.cpp
         librecad/src/lib/filters/tests/dwg_write_smoke_tests.cpp
         librecad/src/lib/filters/tests/eed_tests.cpp
+        librecad/src/lib/printing/tests/printable_area_tests.cpp
+        librecad/src/lib/filters/tests/text_encoding_tests.cpp
         librecad/src/lib/filters/tests/dbcolor_tests.cpp
         librecad/src/lib/filters/tests/entity_metadata_tests.cpp
         librecad/src/lib/filters/tests/mline_tests.cpp
@@ -1760,4 +1764,14 @@ if(BUILD_TESTS)
     target_compile_features(librecad_tests PRIVATE cxx_std_17)
     # compiling time defines
     target_compile_definitions(librecad_tests PRIVATE BUILD_TESTS=1 DWGSUPPORT)
+
+    # QApplication/native print-dialog regression, separate from QGuiApplication tests.
+    add_executable(librecad_printing_ui_tests
+        librecad/src/lib/printing/tests/printing_actions_ui.cpp)
+    target_include_directories(librecad_printing_ui_tests PRIVATE ${SHARED_INCLUDES})
+    target_link_libraries(librecad_printing_ui_tests PRIVATE librecad_lib
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::PrintSupport Qt6::Svg Qt6::Widgets)
+    target_compile_features(librecad_printing_ui_tests PRIVATE cxx_std_17)
+    target_compile_definitions(librecad_printing_ui_tests PRIVATE BUILD_TESTS=1 DWGSUPPORT)
+
 endif()

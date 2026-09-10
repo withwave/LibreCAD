@@ -177,7 +177,7 @@ public slots:
     /** close all files; return false == operation cancelled */
 	void slotFileCloseAll();
     /** prints the current file */
-    void slotFilePrint(bool printPDF=false);
+    void slotFilePrint();
     bool closePrintPreview(QC_MDIWindow *parent);
     void openPrintPreview(QC_MDIWindow *parent);
     void slotFilePrintPDF();
@@ -317,6 +317,7 @@ public:
     LC_ActionGroup* getActionGroup(const QString &groupName) const;
     LC_ActionContext* getActionContext() const;
 protected:
+    void printDrawing(bool printPDF);
     void closeEvent(QCloseEvent*) override;
     bool isAcceptableDragNDropFileName(const QString& fileName);
     //! \{ accept drop files to open

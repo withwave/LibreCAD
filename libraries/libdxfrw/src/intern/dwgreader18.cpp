@@ -193,6 +193,8 @@ bool dwgReader18::readMetaData() {
     DRW_DBG("\ncodepage= "); DRW_DBG(cp);
     if (cp == 30)
         decoder.setCodePage("ANSI_1252", false);
+    if (cp == 40 || cp == 25) // ANSI_949 / Korean code page
+        decoder.setCodePage("ANSI_949", false);
     DRW_DBG("\n3 0x00 bytes(seems 0x00, appDwgV & appMaintV) = "); DRW_DBGH(fileBuf->getRawChar8()); DRW_DBG(", ");
     DRW_DBGH(fileBuf->getRawChar8()); DRW_DBG(", "); DRW_DBGH(fileBuf->getRawChar8());
     securityFlags = fileBuf->getRawLong32();

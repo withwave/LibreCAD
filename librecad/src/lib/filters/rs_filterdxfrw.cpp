@@ -63,6 +63,7 @@
 #include "rs_dimradial.h"
 #include "rs_ellipse.h"
 #include "rs_filterdxfrw.h"
+#include "rs_settings.h"
 #include "rs_graphicview.h"
 #include "rs_hatch.h"
 #include "rs_image.h"
@@ -262,13 +263,16 @@ bool RS_FilterDXFRW::fileImport(RS_Graphic& g, const QString& file, [[maybe_unus
     m_isLibDxfRw = false;
     m_libDxfRwVersion = 0;
 
+    const QString textEncoding = LC_GET_ONE_STR("Defaults", "LegacyTextEncoding", "auto");
+    const std::string readCodePage = textEncoding == "CP949" ? "ANSI_949" :
+        textEncoding == "UTF-8" ? "UTF-8" : "";
 #ifdef DWGSUPPORT
     if (type == RS2::FormatDWG) {
         dwgR dwgr(QFile::encodeName(file));
         RS_DEBUG->print("RS_FilterDXFRW::fileImport: reading DWG file");
         if (RS_DEBUG->getLevel()== RS_Debug::D_DEBUGGING)
             dwgr.setDebug(DRW::DebugLevel::Debug);
-        bool success = dwgr.read(this, true);
+        bool success = dwgr.read(this, true, readCodePage);
         // Capture the recognized version BEFORE acting on the result so
         // BAD_VERSION error reporting (printDwgError / lastError) can
         // name the format the user supplied. dwgR::version is set by
@@ -349,7 +353,7 @@ bool RS_FilterDXFRW::fileImport(RS_Graphic& g, const QString& file, [[maybe_unus
             }
         }
         else {
-            success = m_dxfR->read(this, true);
+            success = m_dxfR->read(this, true, readCodePage);
         }
         RS_DEBUG->print("RS_FilterDXFRW::fileImport: reading file: OK");
         //graphic->setAutoUpdateBorders(true);

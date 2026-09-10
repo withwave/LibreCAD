@@ -1303,13 +1303,18 @@ void QC_ApplicationWindow::slotFileCloseAll() {
 }
 
 void QC_ApplicationWindow::slotFilePrintPDF() {
-    slotFilePrint(true);
+    printDrawing(true);
 }
 
 /**
  * Menu file -> print.
  */
-void QC_ApplicationWindow::slotFilePrint(bool printPDF) {
+void QC_ApplicationWindow::slotFilePrint() {
+    // QAction::triggered(bool) carries a checked state, not an output format.
+    printDrawing(false);
+}
+
+void QC_ApplicationWindow::printDrawing(bool printPDF) {
     QC_MDIWindow *w = getCurrentMDIWindow();
     if (w  == nullptr) {
         return;

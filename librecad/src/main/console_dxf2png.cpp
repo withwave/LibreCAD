@@ -108,6 +108,8 @@ int console_dxf2png(int argc, char* argv[])
     RS_Settings::init(app.organizationName(), app.applicationName());
     RS_SYSTEM->init(app.applicationName(), app.applicationVersion(),
         XSTR(QC_APPDIR), prgDir.toLatin1().data());
+    RS_FONTLIST->init();
+    RS_PATTERNLIST->init();
 
     QCommandLineParser parser;
 

@@ -10,7 +10,7 @@
 #
 # Usage:
 #   scripts/build-mac-signed.sh
-#       -> build + bundle + ad-hoc sign (runs locally, not distributable)
+#       -> build + bundle in build/package.noindex + ad-hoc sign
 #
 #   CODESIGN_IDENTITY="Developer ID Application: MODIN COMPANY (8AC9KUZJ5P)" \
 #       scripts/build-mac-signed.sh
@@ -31,7 +31,8 @@ cd "$SRC_DIR"
 
 QT_PREFIX="$(brew --prefix qt)"
 BUILD_DIR="${BUILD_DIR:-build}"
-APP="LibreCAD.app"
+# Keep development bundles out of Spotlight application searches.
+APP="$BUILD_DIR/package.noindex/LibreCAD.app"
 DMG="LibreCAD.dmg"
 VERSION="$(git describe --always 2>/dev/null || echo 2.2.2)"
 IDENTITY="${CODESIGN_IDENTITY:--}"          # default: ad-hoc '-'
@@ -62,6 +63,16 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BUILD_DIR/librecad" "$APP/Contents/MacOS/librecad"
 cp librecad/res/images/librecad.icns "$APP/Contents/Resources/librecad.icns"
+# RS_System searches Contents/Resources for CAD fonts and support files.
+# Qt's macdeployqt only deploys Qt dependencies; without the LFF fonts,
+# RS_MText::update() cannot create glyphs (including dimension labels).
+for resource in fonts patterns library; do
+    cp -R "librecad/support/$resource" "$APP/Contents/Resources/"
+done
+mkdir -p "$APP/Contents/Resources/qm"
+cp "$BUILD_DIR"/librecad_*.qm "$APP/Contents/Resources/qm/"
+# Fail packaging before signing if the fallback font is missing or empty.
+test -s "$APP/Contents/Resources/fonts/standard.lff"
 sed -e "s/@ICON@/librecad.icns/" \
     -e "s/@FULL_VERSION@/$VERSION/g" \
     -e "s/@TYPEINFO@/????/" \
@@ -71,7 +82,24 @@ sed -e "s/@ICON@/librecad.icns/" \
 
 # 3. Bundle Qt frameworks + plugins into the .app --------------------------
 echo "==> Running macdeployqt"
-"$QT_PREFIX/bin/macdeployqt" "$APP" -verbose=1
+# Deploy the desktop plugins explicitly. Auto-discovery also picks up Qt's
+# virtual keyboard and PDF image reader, whose optional QML/PDF frameworks
+# may remain unresolved in Homebrew installations and load a second Qt.
+PLUGIN_ARGS=()
+for plugin in "$QT_PREFIX"/share/qt/plugins/platforms/libqcocoa.dylib \
+              "$QT_PREFIX"/share/qt/plugins/styles/libqmacstyle.dylib \
+              "$QT_PREFIX"/share/qt/plugins/iconengines/libqsvgicon.dylib \
+              "$QT_PREFIX"/share/qt/plugins/imageformats/*.dylib \
+              "$QT_PREFIX"/share/qt/plugins/tls/*.dylib; do
+    [ -f "$plugin" ] || continue
+    [ "$(basename "$plugin")" = "libqpdf.dylib" ] && continue
+    plugin_dir="$APP/Contents/PlugIns/$(basename "$(dirname "$plugin")")"
+    mkdir -p "$plugin_dir"
+    cp "$plugin" "$plugin_dir/"
+    PLUGIN_ARGS+=("-executable=$plugin_dir/$(basename "$plugin")")
+done
+"$QT_PREFIX/bin/macdeployqt" "$APP" -verbose=1 -no-codesign -no-plugins \
+    -libpath="$QT_PREFIX/lib" -libpath="$(brew --prefix)/lib" "${PLUGIN_ARGS[@]}"
 
 # 4. Codesign ---------------------------------------------------------------
 echo "==> Codesigning"
@@ -107,3 +135,4 @@ fi
 echo "==> Done."
 [ -d "$APP" ] && du -sh "$APP"
 [ "$MAKE_DMG" = "1" ] && ls -lh "$DMG"
+exit 0

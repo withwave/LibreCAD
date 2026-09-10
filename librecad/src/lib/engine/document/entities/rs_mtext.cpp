@@ -531,6 +531,12 @@ void RS_MText::update() {
   usedTextWidth = 0.0;
   usedTextHeight = 0.0;
 
+  // A whitespace-only MTEXT has no drawable geometry. Adding an empty text
+  // line would give it a spurious (0, 0) bounding box and distort Zoom Extents.
+  if (data.text.trimmed().isEmpty()) {
+    return;
+  }
+
   RS_Font *font{RS_FONTLIST->requestFont(data.style)};
   if (nullptr == font) {
     return;

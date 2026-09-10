@@ -28,6 +28,7 @@
 #include <QMouseEvent>
 
 #include "lc_graphicviewport.h"
+#include "lc_printing.h"
 #include "lc_printpreviewview.h"
 #include "qg_printpreviewoptions.h"
 #include "rs_coordinateevent.h"
@@ -53,6 +54,7 @@ RS_ActionPrintPreview::RS_ActionPrintPreview(LC_ActionContext *actionContext)
     :RS_ActionInterface("Print Preview", actionContext, RS2::ActionFilePrintPreview)
     , m_actionData(std::make_unique<ActionData>()){
 
+    if (m_graphic) LC_Printing::applyPrinterMargins(*m_graphic);
     bool fixed = LC_GET_ONE_BOOL("PrintPreview", "PrintScaleFixed");
 
     if (!fixed) {
@@ -73,9 +75,20 @@ void RS_ActionPrintPreview::invokeSettingsDialog(){
         // fixme - sand - Actually, relevant settings there is just page setup and whole drawing options are ovekill.
         // fixme - sand - rework this with proper layouts support!!!
         RS_DIALOGFACTORY->requestOptionsDrawingDialog(*m_graphic);
+        LC_Printing::applyPrinterMargins(*m_graphic);
+        if (!isPaperScaleFixed()) fit();
+        else center();
         updateCoordinateWidgetFormat();
         updateOptionsUI(QG_PrintPreviewOptions::MODE_UPDATE_ORIENTATION);
         zoomToPage();
+    }
+}
+
+void RS_ActionPrintPreview::invokePrinterDialog() {
+    if (m_graphic && LC_Printing::applyPrinterMargins(*m_graphic, nullptr, true)) {
+        if (!isPaperScaleFixed()) fit();
+        else center();
+        redraw();
     }
 }
 
@@ -90,6 +103,9 @@ void RS_ActionPrintPreview::setPaperOrientation(bool portrait) {
     RS2::PaperFormat format = m_graphic->getPaperFormat(&landscape);
     if (landscape != !portrait) {
         m_graphic->setPaperFormat(format, !portrait);
+        LC_Printing::applyPrinterMargins(*m_graphic);
+        if (!isPaperScaleFixed()) fit();
+        else m_graphic->centerToPage();
         zoomToPage();
     }
 }

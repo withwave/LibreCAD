@@ -45,6 +45,7 @@ public:
     int getVersion(){return decoder.getVersion();}
     void setVersion(const std::string &v, bool dxfFormat){decoder.setVersion(v, dxfFormat);}
     void setCodePage(const std::string &c){decoder.setCodePage(c, true);}
+    void setReadCodePage(const std::string &c){decoder.setReadCodePage(c);}
     std::string getCodePage(){ return decoder.getCodePage();}
     void setIgnoreComments(const bool bValue) {m_bIgnoreComments = bValue;}
 

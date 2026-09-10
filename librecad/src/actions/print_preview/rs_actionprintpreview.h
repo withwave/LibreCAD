@@ -75,6 +75,7 @@ public:
     void setPagesNumVertical(int pagesCount);
 
     void invokeSettingsDialog();
+    void invokePrinterDialog();
     bool isPortrait();
     void setPaperOrientation(bool portrait);
 protected:

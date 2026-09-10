@@ -534,6 +534,12 @@ void QG_DlgOptionsGeneral::init(){
     QString def_unit = "Millimeter";
 
     LC_GROUP("Defaults"); {
+        cbLegacyTextEncoding->clear();
+        cbLegacyTextEncoding->addItem(tr("Auto (file code page)"), "auto");
+        cbLegacyTextEncoding->addItem(tr("CP949 (Korean)"), "CP949");
+        cbLegacyTextEncoding->addItem(tr("UTF-8"), "UTF-8");
+        const int encodingIndex = cbLegacyTextEncoding->findData(LC_GET_STR("LegacyTextEncoding", "auto"));
+        cbLegacyTextEncoding->setCurrentIndex(encodingIndex < 0 ? 0 : encodingIndex);
         cbUnit->setCurrentIndex(cbUnit->findText(QObject::tr(LC_GET_STR("Unit", def_unit).toUtf8().data())));
         // Auto save timer
         cbAutoSaveTime->setValue(LC_GET_INT("AutoSaveTime", 5));
@@ -856,6 +862,7 @@ void QG_DlgOptionsGeneral::ok(){
         LC_GROUP_END();
 
         LC_GROUP("Defaults"); {
+            LC_SET("LegacyTextEncoding", cbLegacyTextEncoding->currentData().toString());
             LC_SET("Unit", RS_Units::unitToString(RS_Units::stringToUnit(cbUnit->currentText()), false/*untr.*/));
             LC_SET("AutoSaveTime", cbAutoSaveTime->value());
             LC_SET("AutoBackupDocument", cbAutoBackup->isChecked());

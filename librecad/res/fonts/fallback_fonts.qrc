@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/fonts">
+        <file alias="standard.lff">../../support/fonts/standard.lff</file>
+    </qresource>
+</RCC>

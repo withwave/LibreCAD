@@ -18,6 +18,8 @@ public:
     void setVersion(const std::string &v, bool dxfFormat);
     void setVersion(DRW::Version v, bool dxfFormat);
     void setCodePage(const std::string &c, bool dxfFormat);
+    // Reading override for pre-2007 text only; Unicode formats remain Unicode.
+    void setReadCodePage(const std::string &c) { readCodePage = c.empty() ? c : correctCodePage(c); }
     std::string getCodePage(){return cp;}
 
 private:
@@ -26,6 +28,7 @@ private:
 private:
     DRW::Version version{DRW::UNKNOWNV};
     std::string cp;
+    std::string readCodePage;
     std::unique_ptr< DRW_Converter> conv;
 };
 

@@ -24,14 +24,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define LC_PRINTING_H
 
 #include <QPageSize>
+#include <QPageLayout>
 
 #include "rs.h"
 
 class RS_Graphic;
+class QWidget;
 class QC_MDIWindow;
 // fixme - sand - files - move to proper place outside of /lib !!!
 namespace LC_Printing
 {
+    // All margins are millimetres; preserve at least 2.5 mm and driver minima.
+    QMarginsF printableMargins(QPageLayout layout, const QMarginsF& requested);
+    bool applyPrinterMargins(RS_Graphic& graphic, QWidget* parent = nullptr, bool choosePrinter = false);
+
     enum class PrinterType { Printer, PDF };
     QPageSize::PageSizeId rsToQtPaperFormat(RS2::PaperFormat f);
 

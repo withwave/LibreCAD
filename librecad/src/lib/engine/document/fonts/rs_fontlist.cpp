@@ -28,6 +28,7 @@
 
 #include <QFileInfo>
 #include <QLocale>
+#include <QResource>
 #include <QString>
 #include <QStringList>
 
@@ -100,9 +101,6 @@ RS_Font* RS_FontList::requestFont(const QString& name) {
     RS_DEBUG->print("RS_FontList::requestFont %s",  name.toLatin1().data());
 
     QString name2 = name.toLower();
-    RS_Font* foundFont = nullptr;
-    if (name.isEmpty())
-        return foundFont;
 
     // QCAD 1 compatibility:
     if (name2.contains('#') && name2.contains('_')) {
@@ -118,17 +116,24 @@ RS_Font* RS_FontList::requestFont(const QString& name) {
 
         if (f->getFileName().toLower() == name2) {
             // Make sure this font is loaded into memory:
-            f->loadFont();
-			foundFont = f.get();
+            if (f->loadFont()) {
+                return f.get();
+            }
             break;
         }
     }
 
-	if (!foundFont && name!="standard") {
-        foundFont = requestFont("standard");
+    if (name2 != "standard") {
+        return requestFont("standard");
     }
 
-    return foundFont;
+    // The installed fallback can be missing too (e.g. an incomplete bundle).
+    // Use an embedded LFF so text still produces normal CAD geometry.
+    if (!m_fallbackFont) {
+        Q_INIT_RESOURCE(fallback_fonts);
+        m_fallbackFont = std::make_unique<RS_Font>(":/fonts/standard.lff");
+    }
+    return m_fallbackFont->loadFont() ? m_fallbackFont.get() : nullptr;
 }
 
 

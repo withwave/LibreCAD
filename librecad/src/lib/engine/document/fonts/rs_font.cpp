@@ -31,6 +31,10 @@
 #include "rs_font.h"
 
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QFontMetricsF>
+#include <QGuiApplication>
+#include <QPainterPath>
 
 #include "rs_arc.h"
 #include "rs_debug.h"
@@ -499,8 +503,42 @@ RS_Block* RS_Font::generateLffFont(const QString& key)
 
 RS_Block* RS_Font::findLetter(const QString& name) {
     RS_Block* ret= letterList.find(name);
-    return (ret != nullptr) ? ret : generateLffFont(name);
+    if (ret != nullptr) return ret;
+    ret = generateLffFont(name);
+    if (ret != nullptr) return ret;
 
+    // CAD fonts often lack Hangul and other Unicode glyphs. Use the system's
+    // font fallback and cache its outline as regular CAD geometry.
+    if (name.isEmpty() || !qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
+        return nullptr;
+    }
+    QFont systemFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+    systemFont.setPixelSize(100);
+    QFontMetricsF metrics(systemFont);
+    if (!metrics.inFontUcs4(name.toUcs4().first()) || metrics.capHeight() <= 0.) {
+        return nullptr;
+    }
+    QPainterPath outline;
+    outline.addText(QPointF(0., 0.), systemFont, name);
+    if (outline.isEmpty()) return nullptr;
+    const double scale = 9. / metrics.capHeight();
+    const auto polygons = outline.toSubpathPolygons(QTransform::fromScale(scale, -scale));
+    auto letter = std::make_unique<RS_FontChar>(nullptr, name, RS_Vector(0., 0.));
+    for (const auto& polygon : polygons) {
+        if (polygon.size() < 2) continue;
+        auto* contour = new RS_Polyline(letter.get(), RS_PolylineData());
+        contour->setPen(RS_Pen(RS2::FlagInvalid));
+        contour->setLayer(nullptr);
+        for (const auto& point : polygon) {
+            contour->addVertex(RS_Vector(point.x(), point.y()), 0.);
+        }
+        letter->addEntity(contour);
+    }
+    if (letter->count() == 0) return nullptr;
+    letter->calculateBorders();
+    ret = letter.release();
+    letterList.add(ret);
+    return ret;
 }
 
 /**

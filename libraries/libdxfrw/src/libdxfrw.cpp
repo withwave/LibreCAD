@@ -57,7 +57,7 @@ void dxfRW::setDebug(DRW::DebugLevel lvl){
     }
 }
 
-bool dxfRW::read(DRW_Interface *interface_, bool ext){
+bool dxfRW::read(DRW_Interface *interface_, bool ext, const std::string &codePage){
     drw_assert(fileName.empty() == false);
     applyExt = ext;
     std::ifstream filestr;
@@ -95,6 +95,7 @@ bool dxfRW::read(DRW_Interface *interface_, bool ext){
         reader = std::make_unique<dxfReaderAscii>(&filestr);
     }
 
+    reader->setReadCodePage(codePage);
     bool isOk {processDxf()};
     filestr.close();
     version = (DRW::Version) reader->getVersion();
@@ -102,7 +103,7 @@ bool dxfRW::read(DRW_Interface *interface_, bool ext){
     return isOk;
 }
 
-bool dxfRW::readAscii(DRW_Interface *interface_, bool ext, std::string& content) {
+bool dxfRW::readAscii(DRW_Interface *interface_, bool ext, std::string& content, const std::string &codePage) {
     if (nullptr == interface_) {
         return setError(DRW::BAD_UNKNOWN);
     }
@@ -110,6 +111,7 @@ bool dxfRW::readAscii(DRW_Interface *interface_, bool ext, std::string& content)
     iface = interface_;
     std::istringstream strstream(content);
     reader = std::make_unique<dxfReaderAscii>(&strstream);
+    reader->setReadCodePage(codePage);
     bool isOk {processDxf()};
     version = (DRW::Version) reader->getVersion();
     reader.reset();
@@ -600,7 +602,7 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
         }
     }
     for (auto& kv : ent->vars) {
-        DRW_Variant* v = kv.second;
+        DRW_Variant* v = kv.second.get();
         switch (v->type()) {
             case DRW_Variant::STRING:  writer->writeUtf8String(v->code(), v->c_str()); break;
             case DRW_Variant::INTEGER: writer->writeInt16(v->code(), v->i_val()); break;

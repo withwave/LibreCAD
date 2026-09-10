@@ -87,6 +87,9 @@ void DRW_TextCodec::setCodePage(const std::string &c, bool dxfFormat){
     cp = correctCodePage(c);
     conv.reset();
     if (version == DRW::AC1009 || version == DRW::AC1015) {
+        if (!readCodePage.empty()) {
+            cp = readCodePage;
+        }
         if (cp == "ANSI_874")
             conv.reset( new DRW_ConvTable(DRW_Table874, CPLENGTHCOMMON) );
         else if (cp == "ANSI_932")
@@ -117,7 +120,7 @@ void DRW_TextCodec::setCodePage(const std::string &c, bool dxfFormat){
         else if (cp == "ANSI_1258")
             conv.reset( new DRW_ConvTable(DRW_Table1258, CPLENGTHCOMMON) );
         else if (cp == "UTF-8") { //DXF older than 2007 are write in win codepages
-            cp = "ANSI_1252";
+            if (readCodePage.empty()) cp = "ANSI_1252";
             conv.reset( new DRW_Converter(nullptr, 0) );
         } else
             conv.reset( new DRW_ConvTable(DRW_Table1252, CPLENGTHCOMMON) );
@@ -542,7 +545,7 @@ std::string DRW_TextCodec::correctCodePage(const std::string& s) {
                cp=="ISO-IR-58" || cp=="GB18030") {
         return "ANSI_936";
         //Korean
-    } else if (cp=="ANSI_949" || cp=="EUCKR") {
+    } else if (cp=="ANSI_949" || cp=="CP949" || cp=="WINDOWS-949" || cp=="EUCKR" || cp=="EUC-KR") {
         return "ANSI_949";
         //Chinese Big5 (Taiwan, Hong Kong SAR)
     } else if (cp=="ANSI_950" || cp=="BIG5" || cp=="CN-BIG5" || cp=="CSBIG5" ||
