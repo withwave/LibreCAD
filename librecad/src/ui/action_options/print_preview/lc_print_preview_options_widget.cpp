@@ -49,7 +49,7 @@ namespace {
 LC_PrintPreviewOptionsWidget::LC_PrintPreviewOptionsWidget():ui(new Ui::LC_PrintPreviewOptionsWidget{}) {
     ui->setupUi(this);
     auto* printerArea = new QToolButton(this);
-    printerArea->setText(tr("Printer area"));
+    printerArea->setText(QObject::tr("Printer area"));
     printerArea->setToolTip(tr("Use the selected printer's printable area"));
     ui->tbSettings->parentWidget()->layout()->addWidget(printerArea);
     connect(printerArea, &QToolButton::clicked, this, [this] {

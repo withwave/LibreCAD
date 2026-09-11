@@ -79,6 +79,9 @@ sed -e "s/@ICON@/librecad.icns/" \
     -e "s/@EXECUTABLE@/librecad/" \
     -e "s#@BUNDLEIDENTIFIER@#$BUNDLE_ID#" \
     librecad/src/Info.plist.app > "$APP/Contents/Info.plist"
+# Upstream now hard-codes its identifier in the template. Preserve the
+# configured identity so replacing a local installation remains an upgrade.
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Contents/Info.plist"
 
 # 3. Bundle Qt frameworks + plugins into the .app --------------------------
 echo "==> Running macdeployqt"
