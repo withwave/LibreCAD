@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <QPrinterInfo>
 #include <QInputDialog>
 #include <QRegularExpression>
+#include <algorithm>
 
 #include "lc_graphicviewport.h"
 #include "lc_printpreviewview.h"
@@ -42,63 +43,80 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "rs_settings.h"
 #include "rs_units.h"
 
-// fixme - sand - files - this class should not be in /lib, it has outer dependencies. Reivew!!!!
+// fixme - sand - files - this class should not be in /lib, it has outer dependencies. Review it!!!!
 namespace {
+    // supported paper formats should be added here
+    const std::map<RS2::PaperFormat, QPageSize::PageSizeId> PAPER_TO_PAGE = {
+        {
+            {RS2::A0, QPageSize::A0},
+            {RS2::A1, QPageSize::A1},
+            {RS2::A2, QPageSize::A2},
+            {RS2::A3, QPageSize::A3},
+            {RS2::A4, QPageSize::A4},
 
-// supported paper formats should be added here
-const std::map<RS2::PaperFormat, QPageSize::PageSizeId> paperToPage = {
-    {
-     {RS2::A0, QPageSize::A0},
-     {RS2::A1, QPageSize::A1},
-     {RS2::A2, QPageSize::A2},
-     {RS2::A3, QPageSize::A3},
-     {RS2::A4, QPageSize::A4},
+            /* Removed ISO "B" and "C" series,  C5E,  Comm10E,  DLE,  (envelope sizes) */
 
-     /* Removed ISO "B" and "C" series,  C5E,  Comm10E,  DLE,  (envelope sizes) */
+            {RS2::Letter, QPageSize::Letter},
+            {RS2::Legal, QPageSize::Legal},
+            {RS2::Tabloid, QPageSize::Tabloid},
 
-     {RS2::Letter, QPageSize::Letter},
-     {RS2::Legal,  QPageSize::Legal},
-     {RS2::Tabloid, QPageSize::Tabloid},
+            //case RS2::Ansi_A, QPageSize::AnsiA},
+            //case RS2::Ansi_B, QPageSize::AnsiB},
+            {RS2::Ansi_C, QPageSize::AnsiC},
+            {RS2::Ansi_D, QPageSize::AnsiD},
+            {RS2::Ansi_E, QPageSize::AnsiE},
+            {RS2::Arch_A, QPageSize::ArchA},
+            {RS2::Arch_B, QPageSize::ArchB},
+            {RS2::Arch_C, QPageSize::ArchC},
+            {RS2::Arch_D, QPageSize::ArchD},
+            {RS2::Arch_E, QPageSize::ArchE},
+        }
+    };
 
-     //case RS2::Ansi_A, QPageSize::AnsiA},
-     //case RS2::Ansi_B, QPageSize::AnsiB},
-     {RS2::Ansi_C, QPageSize::AnsiC},
-     {RS2::Ansi_D, QPageSize::AnsiD},
-     {RS2::Ansi_E, QPageSize::AnsiE},
+    /**
+     * @brief setFileNameColor - get the printing output file name and black/white or color mode
+     * @returns QString - the PDF file name to export to
+     * @param printer - a QPrinter
+     * @param graphic - the graphic to print
+     */
+    QString setFileNameColor(QPrinter& printer, const RS_Graphic& graphic) {
+        QString pdfFileName = graphic.getFilename();
+        if (pdfFileName.isEmpty()) {
+            pdfFileName = graphic.getAutoSaveFileName();
+        }
+        static QRegularExpression reSuffix{R"(\.(dxf|dwg)$)", QRegularExpression::CaseInsensitiveOption};
+        pdfFileName.replace(reSuffix, ".pdf");
+        if (!pdfFileName.endsWith(".pdf", Qt::CaseInsensitive)) pdfFileName += ".pdf";
 
-     {RS2::Arch_A, QPageSize::ArchA},
-     {RS2::Arch_B, QPageSize::ArchB},
-     {RS2::Arch_C, QPageSize::ArchC},
-     {RS2::Arch_D, QPageSize::ArchD},
-     {RS2::Arch_E, QPageSize::ArchE},
-     }
-};
-
-/**
- * @brief setFileNameColor - get the printing output file name and black/white or color mode
- * @returns QString - the PDF file name to export to
- * @param printer - a QPrinter
- * @param graphic - the graphic to print
- */
-QString setFileNameColor(QPrinter& printer, RS_Graphic& graphic)
-{
-    QString pdfFileName = graphic.getFilename();
-    if (pdfFileName.isEmpty()) {
-        pdfFileName = graphic.getAutoSaveFileName();
+        // color or black/white mode
+        LC_GROUP_GUARD("Print");
+        printer.setColorMode(static_cast<QPrinter::ColorMode>(LC_GET_INT("ColorMode", QPrinter::Color)));
+        return pdfFileName;
     }
-    static QRegularExpression reSuffix{R"(\.(dxf|dwg)$)", QRegularExpression::CaseInsensitiveOption};
-    pdfFileName.replace(reSuffix, ".pdf");
-    if (!pdfFileName.endsWith(".pdf", Qt::CaseInsensitive)) pdfFileName += ".pdf";
-
-    // color or black/white mode
-    LC_GROUP_GUARD("Print");
-    printer.setColorMode((QPrinter::ColorMode) LC_GET_INT("ColorMode", (int) QPrinter::Color));
-    return pdfFileName;
-}
 }
 
-QPageSize::PageSizeId LC_Printing::rsToQtPaperFormat(RS2::PaperFormat paper){
-    return (paperToPage.count(paper) == 1) ? paperToPage.at(paper) : QPageSize::Custom;
+QPageSize::PageSizeId LC_Printing::rsToQtPaperFormat(const RS2::PaperFormat paperFormat) {
+    return (PAPER_TO_PAGE.count(paperFormat) == 1) ? PAPER_TO_PAGE.at(paperFormat) : QPageSize::Custom;
+}
+
+void LC_Printing::setupPageLayout(QPrinter& printer, bool landscape, QPageSize::PageSizeId paperSizeName,
+                                  const RS_Vector& paperSize, RS2::Unit unit, const QMarginsF& paperMargins)
+{
+    QPageLayout layout;
+    layout.setMode(QPageLayout::FullPageMode);
+    layout.setUnits(QPageLayout::Millimeter);
+
+    if (paperSizeName == QPageSize::Custom) {
+        RS_Vector s = RS_Units::convert(paperSize, unit, RS2::Millimeter);
+        if (landscape)
+            s = s.flipXY();
+        layout.setPageSize(QPageSize{QSizeF(s.x, s.y), QPageSize::Millimeter}, paperMargins);
+    } else {
+        layout.setPageSize(QPageSize{paperSizeName}, paperMargins);
+    }
+    layout.setOrientation(landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+    layout.setMargins(paperMargins);
+    printer.setPageLayout(layout);
 }
 
 QMarginsF LC_Printing::printableMargins(QPageLayout layout, const QMarginsF& requested) {
@@ -114,8 +132,8 @@ QMarginsF LC_Printing::printableMargins(QPageLayout layout, const QMarginsF& req
 namespace {
 void configurePaper(QPrinter& printer, RS_Graphic& graphic) {
     bool landscape = false;
-    auto format = LC_Printing::rsToQtPaperFormat(graphic.getPaperFormat(&landscape));
-    auto size = RS_Units::convert(graphic.getPaperSize(), graphic.getUnit(), RS2::Millimeter);
+    auto format = LC_Printing::rsToQtPaperFormat(graphic.getPlotSettings()->getPaperFormat(&landscape));
+    auto size = RS_Units::convert(graphic.getPlotSettings()->getPaperSize(), graphic.getUnit(), RS2::Millimeter);
     if (landscape) size = size.flipXY();
     printer.setPageSize(format == QPageSize::Custom
         ? QPageSize(QSizeF(size.x, size.y), QPageSize::Millimeter) : QPageSize(format));
@@ -145,23 +163,29 @@ bool LC_Printing::applyPrinterMargins(RS_Graphic& graphic, QWidget* parent, bool
     auto info = QPrinterInfo::printerInfo(name);
     QPrinter printer(info, QPrinter::HighResolution);
     configurePaper(printer, graphic);
+    auto* plot = graphic.getPlotSettings();
+    const auto active = graphic.activeLayoutMargins();
     const auto margins = printableMargins(printer.pageLayout(),
-        {graphic.getMarginLeft(), graphic.getMarginTop(), graphic.getMarginRight(), graphic.getMarginBottom()});
-    auto size = RS_Units::convert(graphic.getPaperSize(), graphic.getUnit(), RS2::Millimeter);
+        {std::max(active[0], plot->getMarginLeftMm()), std::max(active[1], plot->getMarginTopMm()),
+         std::max(active[2], plot->getMarginRightMm()), std::max(active[3], plot->getMarginBottomMm())});
+    const QSizeF actualPaper = printer.pageLayout().fullRect(QPageLayout::Millimeter).size();
+    const RS_Vector size(actualPaper.width(), actualPaper.height());
+    const RS_Vector paperInUnits = RS_Units::convert(size, RS2::Millimeter, graphic.getUnit());
+    if (plot->getPaperSize().distanceTo(paperInUnits) > 0.01) plot->setPaperSize(paperInUnits);
     if (margins.left() + margins.right() >= size.x || margins.top() + margins.bottom() >= size.y) return false;
-    graphic.setMargins(margins.left(), margins.top(), margins.right(), margins.bottom());
+    graphic.setActiveLayoutMargins(margins.left(), margins.top(), margins.right(), margins.bottom());
+    // The current fit/center renderer reads the document plot settings, while
+    // imported DWGs also have independent layout records. Keep both in sync.
+    plot->setMarginsInMm(margins.left(), margins.top(), margins.right(), margins.bottom());
     if (choosePrinter) LC_SET_ONE("Print", "PrinterName", name);
     return true;
 }
 
-void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
-{
-    RS_Graphic *graphic = mdiWindow.getDocument()->getGraphic();
+void LC_Printing::print(QC_MDIWindow &mdiWindow, PrinterType printerType) {
+    RS_Graphic* graphic = mdiWindow.getDocument()->getGraphic();
 
     if (graphic == nullptr) {
-        RS_DEBUG->print(RS_Debug::D_WARNING,
-                        "QC_ApplicationWindow::slotFilePrint: "
-                        "no graphic");
+        RS_DEBUG->print(RS_Debug::D_WARNING, "QC_ApplicationWindow::slotFilePrint: " "no graphic");
         return;
     }
 
@@ -172,25 +196,22 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
     if (printerType == PrinterType::Printer) printer.setPrinterName(previewPrinterName());
 
     bool landscape = false;
-    RS2::PaperFormat paperformat = graphic->getPaperFormat(&landscape);
-    QPageSize::PageSizeId paperSizeName = LC_Printing::rsToQtPaperFormat(paperformat);
-    RS_Vector paperSize = graphic->getPaperSize();
+    LC_PlotSettings* ps = graphic->getPlotSettings();
+    RS2::PaperFormat paperFormat = ps->getPaperFormat(&landscape);
+    QPageSize::PageSizeId paperSizeName = rsToQtPaperFormat(paperFormat);
+    RS_Vector paperSize = ps->getPaperSize();
     RS2::Unit unit = graphic->getUnit();
-    if (paperSizeName == QPageSize::Custom) {
-        RS_Vector s = RS_Units::convert(paperSize, unit, RS2::Millimeter);
-        if (landscape) s = s.flipXY();
-        printer.setPageSize(QPageSize{QSizeF(s.x, s.y), QPageSize::Millimeter});
-        // RS_DEBUG->print(RS_Debug::D_ERROR, "set Custom paper size to (%g, %g)\n", s.x,s.y);
-    } else {
-        printer.setPageSize(QPageSize{static_cast<QPageSize::PageSizeId>(paperSizeName)});
-    }
-    // qDebug()<<"paper size=("<<printer.paperSize(QPrinter::Millimeter).width()<<", "<<printer.paperSize(QPrinter::Millimeter).height()<<")";
-    printer.setPageOrientation(landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
-    QMarginsF paperMargins{graphic->getMarginLeft(),
-                           graphic->getMarginTop(),
-                           graphic->getMarginRight(),
-                           graphic->getMarginBottom()};
-    printer.setPageMargins(paperMargins, QPageLayout::Millimeter);
+    const auto printMargins = graphic->activeLayoutMargins();
+    QMarginsF paperMargins{printMargins[0],   // left
+                           printMargins[1],   // top
+                           printMargins[2],   // right
+                           printMargins[3]};  // bottom
+
+    // Issue #2337: use QPageLayout to set page size, orientation, and margins
+    // together. On Linux/CUPS, setting orientation via setPageOrientation()
+    // after setPageSize() with a standard size ID may not propagate correctly,
+    // resulting in portrait-only output regardless of the landscape setting.
+    LC_Printing::setupPageLayout(printer, landscape, paperSizeName, paperSize, unit, paperMargins);
 
     // Issue #2130: populate the output file name for
     QString defaultFile = setFileNameColor(printer, *graphic);
@@ -198,21 +219,14 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
     // printer setup:
     bool bStartPrinting = false;
     if (printerType == PrinterType::PDF) {
-        printer.setFullPage(true);
         printer.setOutputFormat(QPrinter::PdfFormat);
         printer.setColorMode(QPrinter::Color);
         printer.setResolution(1200);
         // Issue #1897, exporting PDF margins to to follow the drawing settings
-        QPageLayout layout = printer.pageLayout();
-        layout.setMode(QPageLayout::FullPageMode);
-        layout.setUnits(QPageLayout::Millimeter);
-        layout.setMinimumMargins({});
-        RS_Vector s=RS_Units::convert(paperSize, unit, RS2::Millimeter);
-        if(landscape)
-            s=s.flipXY();
-        layout.setPageSize(QPageSize{QSizeF(s.x, s.y), QPageSize::Millimeter});
-        layout.setMargins(paperMargins);
-        printer.setPageLayout(layout);
+        QPageLayout pdfLayout = printer.pageLayout();
+        pdfLayout.setMinimumMargins({});
+        pdfLayout.setMargins(paperMargins);
+        printer.setPageLayout(pdfLayout);
         QString pdfFie = QFileDialog::getSaveFileName(
             &mdiWindow,
             QObject::tr("Export to PDF"),
@@ -222,7 +236,8 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
         if (!pdfFie.endsWith(".pdf", Qt::CaseInsensitive)) pdfFie += ".pdf";
         printer.setOutputFileName(pdfFie);
         bStartPrinting = true;
-    } else {
+    }
+    else {
         printer.setOutputFileName(""); // uncheck 'Print to file' checkbox
         printer.setOutputFormat(QPrinter::NativeFormat);
 
@@ -258,11 +273,11 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
         };
 
         RS_Vector paperSizeMm = RS_Units::convert(paperSize, unit, RS2::Millimeter);
-        QMarginsF printerMargins = printer.pageLayout().margins(QPageLayout::Millimeter);
+
         QRectF paperRect = printer.paperRect(QPrinter::Millimeter);
         RS_Vector printerSizeMm{paperRect.width(), paperRect.height()};
-        if (bStartPrinting
-            && (!equalPaperSize(printerSizeMm, paperSizeMm) || !equalMargins(paperMargins))) {
+        if (bStartPrinting && (!equalPaperSize(printerSizeMm, paperSizeMm) || !equalMargins(paperMargins))) {
+            QMarginsF printerMargins = printer.pageLayout().margins(QPageLayout::Millimeter);
             QMessageBox msgBox(&mdiWindow);
             // FIXME - SAND - localization
             msgBox.setWindowTitle(QObject::tr("Paper settings"));
@@ -274,41 +289,50 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
             qreal printMarginsTop = printerMargins.top();
             qreal printMarginsRight = printerMargins.right();
             qreal printMarginsBottom = printerMargins.bottom();
-            QString detailedText = QString("Drawing settings:\n"
-                                           "\tsize: %1 x %2 (%3)\n"
-                                           "\tmargins: %4, %5, %6, %7\n"
-                                           "\n"
-                                           "Printer settings:\n"
-                                           "\tsize: %8 x %9 (%10)\n"
-                                           "\tmargins: %11, %12, %13, %14\n")
-                .arg(paperSize.x)
-                .arg(paperSize.y)
-                .arg(RS_Units::paperFormatToString(paperformat))
-                .arg(RS_Units::convert(paperMargins.left(), RS2::Millimeter, unit))
-                .arg(RS_Units::convert(paperMargins.top(), RS2::Millimeter, unit))
-                .arg(RS_Units::convert(paperMargins.right(), RS2::Millimeter, unit))
-                .arg(RS_Units::convert(paperMargins.bottom(), RS2::Millimeter, unit))
-                .arg(RS_Units::convert(printerSizeMm.x, RS2::Millimeter, unit))
-                .arg(RS_Units::convert(printerSizeMm.y, RS2::Millimeter, unit))
-                .arg(printer.pageLayout().pageSize().name())
-                .arg(RS_Units::convert(printMarginsLeft, RS2::Millimeter, unit))
-                .arg(RS_Units::convert(printMarginsTop, RS2::Millimeter, unit))
-                .arg(RS_Units::convert(printMarginsRight, RS2::Millimeter, unit))
-                .arg(RS_Units::convert(printMarginsBottom, RS2::Millimeter, unit));
+            QString detailedText =
+                QString(
+                    "Drawing settings:\n" "\tsize: %1 x %2 (%3)\n" "\tmargins: %4, %5, %6, %7\n" "\n" "Printer settings:\n"
+                    "\tsize: %8 x %9 (%10)\n" "\tmargins: %11, %12, %13, %14\n").arg(paperSize.x).arg(paperSize.y).
+                                                                                 arg(RS_Units::paperFormatToString(paperFormat)).
+                                                                                 arg(RS_Units::convert(
+                                                                                     paperMargins.left(), RS2::Millimeter,
+                                                                                     unit)).
+                                                                                 arg(RS_Units::convert(
+                                                                                     paperMargins.top(), RS2::Millimeter,
+                                                                                     unit)).
+                                                                                 arg(RS_Units::convert(
+                                                                                     paperMargins.right(), RS2::Millimeter,
+                                                                                     unit)).arg(RS_Units::convert(
+                                                                                     paperMargins.bottom(), RS2::Millimeter,
+                                                                                     unit)).arg(RS_Units::convert(
+                                                                                     printerSizeMm.x, RS2::Millimeter,
+                                                                                     unit)).arg(RS_Units::convert(
+                                                                                     printerSizeMm.y, RS2::Millimeter,
+                                                                                     unit)).arg(printer.pageLayout().pageSize().name()).
+                                                                                 arg(RS_Units::convert(
+                                                                                     printMarginsLeft, RS2::Millimeter,
+                                                                                     unit)).arg(RS_Units::convert(
+                                                                                     printMarginsTop, RS2::Millimeter, unit)).arg(
+                                                                                     RS_Units::convert(
+                                                                                         printMarginsRight, RS2::Millimeter, unit)).arg(
+                                                                                     RS_Units::convert(
+                                                                                         printMarginsBottom, RS2::Millimeter, unit));
             msgBox.setDetailedText(detailedText);
             int answer = msgBox.exec();
             switch (answer) {
                 case QMessageBox::Yes:
-                    graphic->setPaperSize(RS_Units::convert(printerSizeMm, RS2::Millimeter, unit));
-                    graphic->setMargins(printMarginsLeft, printMarginsTop,
-                                        printMarginsRight, printMarginsBottom);
-                    graphic->centerToPage();
+                    ps->setPaperSize(RS_Units::convert(printerSizeMm, RS2::Millimeter, unit));
+                    graphic->setActiveLayoutMargins(printMarginsLeft, printMarginsTop, printMarginsRight, printMarginsBottom);
+                    ps->setMarginsInMm(printMarginsLeft, printMarginsTop, printMarginsRight, printMarginsBottom);
+                    if (!ps->isPaperScaleFixed()) graphic->fitToPage();
+                    else graphic->centerToPage();
                     mdiWindow.getGraphicView()->redraw();
-                    // Changed printable area must be reviewed before a job is submitted.
                     bStartPrinting = false;
                     break;
                 case QMessageBox::Cancel:
                     bStartPrinting = false;
+                    break;
+                default:
                     break;
             }
         }
@@ -320,36 +344,39 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
 
         RS_Painter painter(&printer);
         // RAII style to restore cursor. Not really a shared pointer for ownership
-        std::shared_ptr<RS_Painter> painterPtr{&painter, []([[maybe_unused]] RS_Painter *painter) {
-            QApplication::restoreOverrideCursor();
-        }};
+        std::shared_ptr<RS_Painter> painterPtr{
+            &painter,
+            []([[maybe_unused]] RS_Painter* p) {
+                QApplication::restoreOverrideCursor();
+            }
+        };
 
-        // fixme - sand rework this later - it seems that printing in general should be refined.  
-        QG_GraphicView *graphicView = mdiWindow.getGraphicView();
+        // fixme - sand rework this later - it seems that printing in general should be refined.
+        QG_GraphicView* graphicView = mdiWindow.getGraphicView();
         RS2::DrawingMode drawingMode = RS2::DrawingMode::ModeAuto;
-        if (graphicView->isPrintPreview()){
-            LC_PrintPreviewView* printPreview = dynamic_cast<LC_PrintPreviewView *>(graphicView);
-            if (printPreview != nullptr){
+        if (graphicView->isPrintPreview()) {
+            auto printPreview = dynamic_cast<LC_PrintPreviewView*>(graphicView);
+            if (printPreview != nullptr) {
                 drawingMode = printPreview->getDrawingMode();
             }
         }
         painter.setDrawingMode(drawingMode);
 
         QMarginsF margins = printer.pageLayout().margins(QPageLayout::Millimeter);
-//        LC_ERR << "Printer margins (mm): " << margins.left()<<": "<<margins.top()<<" : "<<margins.right()<<" : "<<margins.bottom();
+        //        LC_ERR << "Printer margins (mm): " << margins.left()<<": "<<margins.top()<<" : "<<margins.right()<<" : "<<margins.bottom();
 
         double printerWidth = printer.width();
         double printerHeight = printer.height();
 
-        double printerFx = (double) printerWidth / printer.widthMM();
-        double printerFy = (double) printerHeight / printer.heightMM();
+        double printerFx = printer.logicalDpiX() / 25.4;
+        double printerFy = printer.logicalDpiY() / 25.4;
 
         painter.setClipRect(margins.left() * printerFx, margins.top() * printerFy,
                             printerWidth - (margins.left() + margins.right()) * printerFx,
                             printerHeight - (margins.top() + margins.bottom()) * printerFy);
 
         LC_GraphicViewport viewport;
-        viewport.setContainer(graphic);
+        viewport.setDocument(graphic);
         viewport.setBorders(0, 0, 0, 0);
         viewport.setSize(printerWidth, printerHeight);
 
@@ -357,7 +384,7 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
         viewport.loadSettings();
         renderer.loadSettings();
         renderer.setDrawingMode(drawingMode);
-        renderer.setPaperScale(graphic->getPaperScale());
+        renderer.setPaperScale(ps->getPaperScale());
 
         bool scaleLineWidth = mdiWindow.getGraphicView()->getLineWidthScaling();
         renderer.setLineWidthScaling(scaleLineWidth);
@@ -369,7 +396,7 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
 
         double f = (fx + fy) / 2.0;
 
-        double scale = graphic->getPaperScale();
+        double scale = ps->getPaperScale();
         double factor = f * scale;
 
         //RS_DEBUG->print(RS_Debug::D_ERROR, "PaperSize=(%d, %d)\n",printer.widthMM(), printer.heightMM());
@@ -377,9 +404,9 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
         double baseX = graphic->getPaperInsertionBase().x;
         double baseY = graphic->getPaperInsertionBase().y;
 
-        int numX = graphic->getPagesNumHoriz();
-        int numY = graphic->getPagesNumVert();
-        RS_Vector printArea = graphic->getPrintAreaSize(false);
+        int numX = ps->getPagesNumHoriz();
+        int numY = ps->getPagesNumVert();
+        RS_Vector printArea = ps->getPrintAreaSize(false);
 
         for (int pY = 0; pY < numY; pY++) {
             double offsetY = printArea.y * pY;
@@ -391,18 +418,15 @@ void LC_Printing::Print(QC_MDIWindow &mdiWindow, PrinterType printerType)
                     printer.newPage();
                 }
 
-                viewport.justSetOffsetAndFactor((int) ((baseX - offsetX) * f),
-                                                (int) ((baseY - offsetY) * f),
-                                                factor);
+                viewport.justSetOffsetAndFactor(static_cast<int>((baseX - offsetX) * f), static_cast<int>((baseY - offsetY) * f), factor);
 
-
-                painter.setViewPort(&viewport);  // update offset
+                painter.setViewPort(&viewport); // update offset
                 renderer.render();
 
-//                painter.setDrawSelectedOnly(true);
-//                gv.drawEntity(&painter, graphic);
-//                painter.setDrawSelectedOnly(false);
-//                gv.drawEntity(&painter, graphic);
+                //                painter.setDrawSelectedOnly(true);
+                //                gv.drawEntity(&painter, graphic);
+                //                painter.setDrawSelectedOnly(false);
+                //                gv.drawEntity(&painter, graphic);
             }
         }
 

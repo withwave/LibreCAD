@@ -39,21 +39,30 @@ $ librecad dxf2svg foo.dxf
 
 ## Releases and Milestones
 
+### Quick Downloads
+- [Latest stable release](https://github.com/LibreCAD/LibreCAD/releases/latest)
+- [Latest build from stable branch 2.2.1](https://github.com/LibreCAD/LibreCAD/releases/tag/2.2.1-latest)
+- [Latest build from master](https://github.com/LibreCAD/LibreCAD/releases/tag/continuous)
+
 ### Releases
 - [Releases and Prereleases](https://github.com/LibreCAD/LibreCAD/releases)
-### Latest Builds
-- [2.2.2_alpha-latest](https://github.com/LibreCAD/LibreCAD/releases/tag/2.2.2_alpha-latest)
-- [2.2.1.x latest](https://github.com/LibreCAD/LibreCAD/releases/tag/2.2.1-latest)
 
-  For macOS arm64 builds, the app is __NOT__ signed. To workaround the "damaged" error ([#2162](https://github.com/LibreCAD/LibreCAD/issues/2162)):
-  ```bash
-  xattr -rc LibreCAD.app
-  sudo codesign --force --deep --sign - LibreCAD.app
-  ```
+The macOS build is a universal (Apple Silicon + Intel) app. It is ad-hoc signed
+rather than signed with an Apple Developer ID, so it is not notarized: macOS
+still shows an unidentified-developer warning on first launch. Open it once via
+right-click &rarr; Open, or clear the quarantine attribute
+([#2162](https://github.com/LibreCAD/LibreCAD/issues/2162)):
+```bash
+xattr -rc LibreCAD.app
+```
 
 
 ## Built with libdxfrw
 [`libdxfrw`](https://github.com/LibreCAD/libdxfrw) is an associated project that allows LibreCAD to read DXF and DWG files.
+
+
+## ESRI Shapefile (.shp) Import
+LibreCAD can natively import ESRI Shapefiles (`.shp`/`.shx`/`.dbf`), built with [`shapelib`](https://shapelib.maptools.org/). Points, polylines/arcs, and polygons are imported as native entities (Z preserved), with DBF-driven layers and per-entity styling (color, linetype, width) where the corresponding fields are present. Import is read-only; there is no Shapefile export.
 
 
 ## Requests and Bug Reports

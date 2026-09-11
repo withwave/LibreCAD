@@ -1,6 +1,7 @@
 // GUI regression: run with the native cocoa platform on macOS.
 // Native print dialogs are inspected and cancelled; no printer jobs are sent.
 #include "qc_applicationwindow.h"
+#include "lc_documentsstorage.h"
 #include "qc_mdiwindow.h"
 #include "qg_graphicview.h"
 #include "rs_debug.h"
@@ -35,6 +36,8 @@ int main(int argc, char **argv) {
     RS_FONTLIST->init();
     auto &window = QC_ApplicationWindow::getAppWindow();
     window->show();
+    window->raise();
+    window->QWidget::activateWindow();
     window->slotFileNewFromDefaultTemplate();
     auto *graphic = window->getCurrentMDIWindow()->getDocument()->getGraphic();
     struct WindowCleanup {
@@ -47,9 +50,15 @@ int main(int argc, char **argv) {
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         window.reset();
     }};
-    graphic->setUnit(RS2::Millimeter);
-    graphic->setPaperFormat(RS2::A4, false);
-    graphic->addEntity(new RS_Line(graphic, RS_LineData({0., 0.}, {100., 100.})));
+    const QString input = qEnvironmentVariable("LIBRECAD_PRINTING_TEST_INPUT");
+    if (input.isEmpty()) {
+        graphic->setUnit(RS2::Millimeter);
+        graphic->addEntity(new RS_Line(graphic, RS_LineData({0., 0.}, {100., 100.})));
+    } else {
+        LC_DocumentsStorage storage;
+        if (!storage.loadDocument(graphic, input, RS2::FormatUnknown)) return 8;
+    }
+    graphic->getPlotSettings()->setPaperFormat(RS2::A4, false);
     graphic->calculateBorders();
     window->slotFilePrintPreview(true);
     app.processEvents();
@@ -81,7 +90,7 @@ int main(int argc, char **argv) {
                 // panel on macOS. Cancel the test process's panel explicitly.
                 QProcess::execute("osascript", {"-e",
                     "tell application \"System Events\" to tell process \"librecad_printing_ui_tests\" "
-                    "\nif exists window \"Print\" then\n"
+                    "\nset frontmost to true\nif exists window \"Print\" then\n"
                     "click button \"Cancel\" of splitter group 1 of window \"Print\"\n"
                     "end if\nend tell"});
 #endif
@@ -135,6 +144,8 @@ int main(int argc, char **argv) {
         return 2;
     }
     qInfo() << "NATIVE_PRINT_ROUTE_OK";
+    const double originalScale = graphic->getPlotSettings()->getPaperScale();
+    const RS_Vector originalBase = graphic->getPaperInsertionBase();
     phase = PDF;
     pdf->trigger();
     if (!QFileInfo::exists(output))
@@ -149,12 +160,20 @@ int main(int argc, char **argv) {
         if ((p == Context) != QFileInfo::exists(output))
             return 4;
         app.processEvents();
+        if (graphic->getPlotSettings()->getPaperScale() != originalScale ||
+            graphic->getPaperInsertionBase().distanceTo(originalBase) > 1e-9) {
+            qCritical() << "PRINT_PLACEMENT_DRIFT";
+            return 10;
+        }
     }
+    qInfo() << "PRINT_PLACEMENT_STABLE";
     if (menuCount != 3 || destroyCount != 3) {
         qCritical() << "MENU_COUNTS" << menuCount << destroyCount;
         return 5;
     }
     qInfo() << "CONTEXT_PDF_SAVE_CANCEL_REPEAT_OK" << menuCount << destroyCount;
+    const QString artifact = qEnvironmentVariable("LIBRECAD_PRINTING_TEST_OUTPUT");
+    if (!artifact.isEmpty() && !QFile::copy(output, artifact)) return 9;
     running = false;
     // Exercise normal shutdown while the action context and document listeners
     // are still alive; resetting the singleton bypasses closeEvent cleanup.

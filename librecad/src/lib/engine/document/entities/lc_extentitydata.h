@@ -40,7 +40,7 @@ class LC_ExtDataTag {
   };
 
 public:
-  LC_ExtDataTag() = default;
+  LC_ExtDataTag();
   LC_ExtDataTag(int code, const RS_Vector &value);
   LC_ExtDataTag(int code, int value);
   LC_ExtDataTag(int code, double value);
@@ -52,6 +52,7 @@ public:
   ~LC_ExtDataTag();
   void add(RS_Variable *v);
   void add(LC_ExtDataTag *tag);
+  void makeList();
   bool isAtomic() const;
   bool isRef() const;
   bool isLayerRef() const;
@@ -64,7 +65,7 @@ private:
     RS_Variable* m_var{nullptr};
     std::vector<LC_ExtDataTag*> m_list;
     QByteArray m_bytes;
-    TYPE type {VAR};
+    TYPE m_type {VAR};
 };
 
 class LC_ExtDataGroup {
@@ -89,10 +90,10 @@ private:
 
 class LC_ExtDataAppData {
 public:
-    LC_ExtDataAppData(const QString& applicationName);
+    explicit LC_ExtDataAppData(const QString& applicationName);
     ~LC_ExtDataAppData();
-    LC_ExtDataGroup* addGroup(const QString& applicationName);
-    LC_ExtDataGroup* getGroupByName(const QString& applicationName);
+    LC_ExtDataGroup* addGroup(const QString& groupName);
+    LC_ExtDataGroup* getGroupByName(const QString& groupName) const;
     QString getName();
     std::vector<LC_ExtDataGroup*>* getGroups();
 private:
@@ -105,8 +106,8 @@ public:
     LC_ExtEntityData();
     ~LC_ExtEntityData();
     LC_ExtDataAppData* addAppData(const QString& appName);
-    LC_ExtDataAppData* getAppDataByName(const QString& groupName);
-    LC_ExtDataGroup* getGroupByName(const QString& appName, const QString& groupName);
+    LC_ExtDataAppData* getAppDataByName(const QString& groupName) const;
+    LC_ExtDataGroup* getGroupByName(const QString& appName, const QString& groupName) const;
     std::vector<LC_ExtDataAppData*>* getAppData();
     /// Deep-copy clone for ownership transfer (e.g. RS_Entity copy ctor).
     std::unique_ptr<LC_ExtEntityData> clone() const;
@@ -115,4 +116,4 @@ public:
     std::vector<LC_ExtDataAppData*> m_appData;
 };
 
-#endif // LC_EXTENTITYDATA_H
+#endif

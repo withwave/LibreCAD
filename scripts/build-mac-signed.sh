@@ -61,7 +61,7 @@ ninja -C "$BUILD_DIR"
 echo "==> Assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BUILD_DIR/librecad" "$APP/Contents/MacOS/librecad"
+cp "$BUILD_DIR/native.noindex/LibreCAD.app/Contents/MacOS/LibreCAD" "$APP/Contents/MacOS/librecad"
 cp librecad/res/images/librecad.icns "$APP/Contents/Resources/librecad.icns"
 # RS_System searches Contents/Resources for CAD fonts and support files.
 # Qt's macdeployqt only deploys Qt dependencies; without the LFF fonts,

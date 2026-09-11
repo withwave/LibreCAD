@@ -36,6 +36,48 @@ mkdir -p appdir/usr/share/doc/librecad
 mkdir -p appdir/usr/share/icons/hicolor/256x256/apps
 mkdir -p appdir/usr/share/icons/hicolor/scalable/apps
 mkdir -p appdir/usr/share/librecad
+mkdir -p appdir/usr/lib/aarch64-linux-gnu/qt6
+echo "copying Qt6 plugins"
+export QPA_PLUGIN_FOLDER="$(find /usr/lib/aarch64-linux-gnu/qt6/ -type d -name plugins -print)"
+# See CI/build-appimg.sh for the full rationale, including which categories
+# appimagetool re-deploys wholesale regardless of what is staged here. In
+# short: the blanket copy pulled in libraries nothing in LibreCAD ever opens
+# (GTK3+Cairo+Pango+ATK, QML/Quick, the Wayland compositor side), and its
+# GTK3 platform theme plugin supplies its own font settings on GTK desktops.
+LC_QT_PLUGINS=(
+    platforms/libqxcb.so
+    platforms/libqwayland-egl.so
+    platforms/libqwayland-generic.so
+    platforms/libqminimal.so
+    platforms/libqoffscreen.so
+    xcbglintegrations/libqxcb-glx-integration.so
+    xcbglintegrations/libqxcb-egl-integration.so
+    platforminputcontexts/libcomposeplatforminputcontextplugin.so
+    platforminputcontexts/libibusplatforminputcontextplugin.so
+    iconengines/libqsvgicon.so
+    imageformats/libqgif.so
+    imageformats/libqico.so
+    imageformats/libqjpeg.so
+    imageformats/libqsvg.so
+    imageformats/libqtiff.so
+    tls/libqopensslbackend.so
+    tls/libqcertonlybackend.so
+    printsupport/libcupsprintersupport.so
+    wayland-decoration-client/libbradient.so
+    wayland-graphics-integration-client/libqt-plugin-wayland-egl.so
+    wayland-shell-integration/libxdg-shell.so
+)
+for plugin in "${LC_QT_PLUGINS[@]}"; do
+    src="${QPA_PLUGIN_FOLDER}/${plugin}"
+    if [ -f "${src}" ]; then
+        install -D "${src}" "appdir/usr/lib/aarch64-linux-gnu/qt6/plugins/${plugin}"
+    else
+        echo "warning: expected Qt6 plugin not found: ${src}" >&2
+    fi
+done
+cp -r appdir/usr/lib/aarch64-linux-gnu/qt6/plugins/platforms appdir/usr/bin/
+echo "copying xcb-cursor library"
+find /usr/lib -name "libxcb-cursor.so*" -exec cp -L {} appdir/usr/lib/ \;
 
 # strip binaries
 strip unix/librecad
@@ -51,8 +93,12 @@ cp desktop/org.librecad.librecad.appdata.xml appdir/usr/share/metainfo/
 
 cp -r librecad/support/doc/* appdir/usr/share/doc/librecad/
 cp -r librecad/support/fonts appdir/usr/share/librecad/
-cp -r librecad/support/library appdir/usr/share/librecad/
-cp -r librecad/support/patterns appdir/usr/share/librecad/
+if [ -d librecad/support/library ]; then
+    cp -r librecad/support/library appdir/usr/share/librecad/
+fi
+if [ -d librecad/support/patterns ]; then
+    cp -r librecad/support/patterns appdir/usr/share/librecad/
+fi
 
 cp CI/librecad.svg appdir/usr/share/icons/hicolor/scalable/apps/
 convert -resize 256x256 CI/librecad.svg appdir/usr/share/icons/hicolor/256x256/apps/librecad.png
@@ -74,4 +120,3 @@ chmod +x *.AppImage
 VERSION=`git describe --always` ARCH=aarch64 ./appimagetool-*.AppImage -s deploy appdir/usr/share/applications/*.desktop
 VERSION=`git describe --always` ./appimagetool-*.AppImage ./appdir
 chmod +x *.AppImage
-

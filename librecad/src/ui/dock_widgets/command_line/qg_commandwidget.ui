@@ -151,7 +151,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
  </customwidgets>
  <resources>
   <include location="../../../../res/icons/icons.qrc"/>
-  <include location="../../../../res/icons/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

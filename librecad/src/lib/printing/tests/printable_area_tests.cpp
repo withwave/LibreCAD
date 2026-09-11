@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "lc_printing.h"
+#include "drw_objects.h"
+#include <QApplication>
+#include <QPrinter>
 #include "rs_graphic.h"
 #include "rs_line.h"
 #include "rs_settings.h"
@@ -33,27 +36,27 @@ TEST_CASE("Fit and center respect printable bounds for both orientations and uni
         for (bool landscape : {false, true}) {
             RS_Graphic graphic;
             graphic.setUnit(unit);
-            graphic.setPaperFormat(RS2::A4, landscape);
-            graphic.setMargins(3.4, 5., 8., 12.);
+            graphic.getPlotSettings()->setPaperFormat(RS2::A4, landscape);
+            graphic.setActiveLayoutMargins(3.4, 5., 8., 12.);
             graphic.addEntity(new RS_Line(&graphic, RS_LineData({-100., -200.}, {400., 700.})));
             graphic.calculateBorders();
-            graphic.setPaperScaleFixed(false);
+            graphic.getPlotSettings()->setPaperScaleFixed(false);
             REQUIRE(graphic.fitToPage());
-            auto lower = RS_Units::convert(graphic.getMin()*graphic.getPaperScale()+graphic.getPaperInsertionBase(), unit, RS2::Millimeter);
-            auto upper = RS_Units::convert(graphic.getMax()*graphic.getPaperScale()+graphic.getPaperInsertionBase(), unit, RS2::Millimeter);
-            auto paper = RS_Units::convert(graphic.getPaperSize(), unit, RS2::Millimeter);
+            auto lower = RS_Units::convert(graphic.getMin()*graphic.getPlotSettings()->getPaperScale()+graphic.getPaperInsertionBase(), unit, RS2::Millimeter);
+            auto upper = RS_Units::convert(graphic.getMax()*graphic.getPlotSettings()->getPaperScale()+graphic.getPaperInsertionBase(), unit, RS2::Millimeter);
+            auto paper = RS_Units::convert(graphic.getPlotSettings()->getPaperSize(), unit, RS2::Millimeter);
             CHECK(lower.x >= 3.4-1e-6);
             CHECK(lower.y >= 12.-1e-6);
             CHECK(upper.x <= paper.x-8.+1e-6);
             CHECK(upper.y <= paper.y-5.+1e-6);
-            graphic.setPaperScaleFixed(true);
-            const double scale = graphic.getPaperScale();
-            graphic.setMargins(10., 15., 10., 15.);
+            graphic.getPlotSettings()->setPaperScaleFixed(true);
+            const double scale = graphic.getPlotSettings()->getPaperScale();
+            graphic.setActiveLayoutMargins(10., 15., 10., 15.);
             graphic.centerToPage();
-            CHECK(graphic.getPaperScale() == scale);
-            graphic.setPagesNum(2, 3);
-            auto single = graphic.getPrintAreaSize(false);
-            auto tiled = graphic.getPrintAreaSize();
+            CHECK(graphic.getPlotSettings()->getPaperScale() == scale);
+            graphic.getPlotSettings()->setPagesNum(2, 3);
+            auto single = graphic.getPlotSettings()->getPrintAreaSize(false);
+            auto tiled = graphic.getPlotSettings()->getPrintAreaSize();
             CHECK(tiled.x == Catch::Approx(single.x*2));
             CHECK(tiled.y == Catch::Approx(single.y*3));
         }
@@ -65,20 +68,58 @@ TEST_CASE("Default safety margins keep fitted geometry inside every paper edge",
     for (bool landscape : {false, true}) {
         RS_Graphic graphic;
         graphic.setUnit(RS2::Millimeter);
-        graphic.setPaperFormat(RS2::A4, landscape);
+        graphic.getPlotSettings()->setPaperFormat(RS2::A4, landscape);
         QPageLayout layout(QPageSize(QPageSize::A4), QPageLayout::Portrait, {}, QPageLayout::Millimeter);
         const auto margins = LC_Printing::printableMargins(layout, {});
-        graphic.setMargins(margins.left(), margins.top(), margins.right(), margins.bottom());
+        graphic.setActiveLayoutMargins(margins.left(), margins.top(), margins.right(), margins.bottom());
         graphic.addEntity(new RS_Line(&graphic, RS_LineData({-100., -200.}, {400., 700.})));
         graphic.calculateBorders();
-        graphic.setPaperScaleFixed(false);
+        graphic.getPlotSettings()->setPaperScaleFixed(false);
         REQUIRE(graphic.fitToPage());
-        const auto lower = graphic.getMin()*graphic.getPaperScale()+graphic.getPaperInsertionBase();
-        const auto upper = graphic.getMax()*graphic.getPaperScale()+graphic.getPaperInsertionBase();
-        const auto paper = graphic.getPaperSize();
+        const auto lower = graphic.getMin()*graphic.getPlotSettings()->getPaperScale()+graphic.getPaperInsertionBase();
+        const auto upper = graphic.getMax()*graphic.getPlotSettings()->getPaperScale()+graphic.getPaperInsertionBase();
+        const auto paper = graphic.getPlotSettings()->getPaperSize();
         CHECK(lower.x >= 2.5-1e-6);
         CHECK(lower.y >= 2.5-1e-6);
         CHECK(upper.x <= paper.x-2.5+1e-6);
         CHECK(upper.y <= paper.y-2.5+1e-6);
     }
+}
+
+TEST_CASE("Imported layout margins reach both page layout and fit calculations", "[printing]") {
+    static int argc = 1;
+    static char name[] = "print-layout-tests";
+    static char* argv[] = {name, nullptr};
+    if (!QCoreApplication::instance()) new QApplication(argc, argv);
+    if (!RS_SETTINGS) RS_Settings::init("LibreCAD", "LibreCAD-print-tests");
+    RS_Graphic graphic;
+    graphic.setUnit(RS2::Millimeter);
+    graphic.getPlotSettings()->setPaperFormat(RS2::A4, false);
+    DRW_Layout layout;
+    layout.handle = 0x20;
+    layout.name = "Layout1";
+    layout.marginLeft = 5.;
+    layout.marginTop = 6.;
+    layout.marginRight = 7.;
+    layout.marginBottom = 8.;
+    graphic.dwgAdvancedMetadata().addLayout(layout);
+    graphic.setActiveLayoutHandle(layout.handle);
+    REQUIRE(LC_Printing::applyPrinterMargins(graphic));
+    const auto margins = graphic.activeLayoutMargins();
+    auto* plot = graphic.getPlotSettings();
+    CHECK(plot->getMarginLeftMm() == margins[0]);
+    CHECK(plot->getMarginTopMm() == margins[1]);
+    CHECK(plot->getMarginRightMm() == margins[2]);
+    CHECK(plot->getMarginBottomMm() == margins[3]);
+    graphic.addEntity(new RS_Line(&graphic, RS_LineData({-10., -20.}, {90., 180.})));
+    graphic.calculateBorders();
+    REQUIRE(graphic.fitToPage());
+    const auto lower = graphic.getMin()*plot->getPaperScale()+graphic.getPaperInsertionBase();
+    CHECK(lower.x >= margins[0] - 1e-6);
+    CHECK(lower.y >= margins[3] - 1e-6);
+    QPrinter printer(QPrinter::HighResolution);
+    const QMarginsF requested(margins[0], margins[1], margins[2], margins[3]);
+    LC_Printing::setupPageLayout(printer, false, QPageSize::A4, RS_Vector(210., 297.),
+                                 RS2::Millimeter, requested);
+    CHECK(printer.pageLayout().margins(QPageLayout::Millimeter) == requested);
 }

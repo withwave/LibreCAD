@@ -20,7 +20,8 @@
 
 class dwgReader15 : public dwgReader {
 public:
-    dwgReader15(std::ifstream *stream, dwgRW *p):dwgReader(stream, p){}
+    dwgReader15(std::unique_ptr<dwgBuffer> buffer, dwgRW *p)
+        : dwgReader(std::move(buffer), p) {}
     bool readMetaData() override;
     bool readFileHeader() override;
     bool readDwgHeader(DRW_Header& hdr) override;
@@ -30,16 +31,18 @@ public:
     bool readDwgBlocks(DRW_Interface& intfa) override;
     bool readDwgEntities(DRW_Interface& intfa) override {
         bool ret = true;
-        ret = dwgReader::readDwgEntities(intfa, fileBuf.get());
+        ret = dwgReader::readDwgEntities(
+            intfa, fileBuf.get(), DwgIntegrityAddressSpace::PhysicalFile);
         return ret;
     }
     bool readDwgObjects(DRW_Interface& intfa) override {
         bool ret = true;
-        ret = dwgReader::readDwgObjects(intfa, fileBuf.get());
+        ret = dwgReader::readDwgObjects(
+            intfa, fileBuf.get(), DwgIntegrityAddressSpace::PhysicalFile);
         return ret;
     }
 //    bool readDwgEntity(objHandle& obj, DRW_Interface& intfa);
 };
 
 
-#endif // DWGREADER15_H
+#endif

@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include <cmath>
 #include <functional>
@@ -7,6 +8,8 @@
 
 #include "rs_block.h"
 #include "rs_dimension.h"
+#include "rs_dimdiametric.h"
+#include "rs_dimradial.h"
 #include "rs_filterdxfrw.h"
 #include "rs_font.h"
 #include "rs_fontlist.h"
@@ -120,6 +123,7 @@ TEST_CASE("Wheel DWG dimensions render without installed fonts", "[.font-dwg]") 
     RS_Graphic graphic;
     RS_FilterDXFRW filter;
     REQUIRE(filter.fileImport(graphic, path, RS2::FormatDWG));
+    graphic.onLoadingCompleted();
     int dimensions = 0;
     int labels = 0;
     for (auto* entity : graphic) {
@@ -131,6 +135,7 @@ TEST_CASE("Wheel DWG dimensions render without installed fonts", "[.font-dwg]") 
                 if (auto* text = dynamic_cast<RS_MText*>(child)) {
                     if (text->getText().trimmed().isEmpty()) continue;
                     ++labels;
+                    CHECK(text->getHeight() == Catch::Approx(1.5));
                     CHECK(text->countDeep() > 0);
                     CHECK(std::isfinite(text->getUsedTextWidth()));
                     CHECK(text->getUsedTextWidth() > 0.);
@@ -149,4 +154,86 @@ TEST_CASE("Wheel DWG dimensions render without installed fonts", "[.font-dwg]") 
     CHECK(graphic.getSize().x < 1000.);
     CHECK(graphic.getSize().y > 200.);
     CHECK(graphic.getSize().y < 1000.);
+}
+
+TEST_CASE("Automatic dimension symbols preserve explicit labels", "[fonts][dimension]") {
+    RS_DimensionData data;
+    data.definitionPoint = RS_Vector(0., 0.);
+    struct DiameterLabel : RS_DimDiametric {
+        using RS_DimDiametric::RS_DimDiametric;
+        QString measurement = "2.2";
+        QString getMeasuredLabel() override { return measurement; }
+    };
+    struct RadiusLabel : RS_DimRadial {
+        using RS_DimRadial::RS_DimRadial;
+        QString getMeasuredLabel() override { return "2.2"; }
+    };
+    DiameterLabel diameter(nullptr, data, RS_DimDiametricData(RS_Vector(2.2, 0.), 0.));
+    RadiusLabel radius(nullptr, data, RS_DimRadialData(RS_Vector(2.2, 0.), 0.));
+    CHECK(diameter.getLabel() == QString::fromUtf8("⌀2.2"));
+    CHECK(radius.getLabel() == "R2.2");
+    diameter.setLabel("custom <>");
+    CHECK(diameter.getLabel() == "custom 2.2");
+    diameter.measurement = "2,2";
+    CHECK(diameter.getLabel() == "custom 2,2");
+    diameter.setLabel(" ");
+    CHECK(diameter.getLabel().isEmpty());
+}
+
+TEST_CASE("MTEXT height controls scale glyphs without printing control text", "[fonts][mtext]") {
+    NoInstalledFonts fonts;
+    RS_MTextData data;
+    data.insertionPoint = RS_Vector(0., 0.);
+    data.height = 2.;
+    data.style = "standard";
+    data.text = "88";
+    RS_MText normal(nullptr, data);
+    normal.update();
+    data.text = "{\\H0.5x;88}";
+    RS_MText relative(nullptr, data);
+    relative.update();
+    data.text = "{\\H1;88}";
+    RS_MText absolute(nullptr, data);
+    absolute.update();
+    CHECK(relative.getUsedTextWidth() == Catch::Approx(normal.getUsedTextWidth() * 0.5));
+    CHECK(absolute.getUsedTextWidth() == Catch::Approx(relative.getUsedTextWidth()));
+    CHECK(relative.countDeep() == normal.countDeep());
+    CHECK(RS_FilterDXFRW::toNativeString(data.text, true) == data.text);
+    CHECK(RS_FilterDXFRW::toNativeString(data.text) == "88");
+}
+
+TEST_CASE("Imported dimension display blocks retain producer geometry until edited", "[fonts][dimension][dxf]") {
+    NoInstalledFonts fonts;
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    const QString path = directory.filePath("cached-dimension.dxf");
+    QFile file(path);
+    REQUIRE(file.open(QIODevice::WriteOnly));
+    const QByteArray dxf =
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n0\nENDSEC\n"
+        "0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n5\n20\n8\n0\n2\n*D1\n70\n1\n10\n0\n20\n0\n"
+        "0\nLINE\n5\n21\n8\n0\n10\n10\n20\n20\n11\n30\n21\n40\n"
+        "0\nENDBLK\n5\n22\n0\nENDSEC\n"
+        "0\nSECTION\n2\nENTITIES\n0\nDIMENSION\n5\n30\n8\n0\n2\n*D1\n70\n1\n"
+        "10\n0\n20\n10\n11\n5\n21\n10\n13\n0\n23\n0\n14\n10\n24\n0\n"
+        "0\nENDSEC\n0\nEOF\n";
+    REQUIRE(file.write(dxf) == dxf.size());
+    file.close();
+    RS_Graphic graphic;
+    RS_FilterDXFRW filter;
+    REQUIRE(filter.fileImport(graphic, path, RS2::FormatDXFRW));
+    RS_Dimension* dimension = nullptr;
+    for (auto* entity : graphic) {
+        if (auto* candidate = dynamic_cast<RS_Dimension*>(entity)) dimension = candidate;
+    }
+    REQUIRE(dimension != nullptr);
+    REQUIRE(dimension->count() == 1);
+    graphic.onLoadingCompleted();
+    REQUIRE(dimension->count() == 1);
+    CHECK(dimension->getMin().x == Catch::Approx(10.));
+    CHECK(dimension->getMax().y == Catch::Approx(40.));
+    dimension->setLabel("edited");
+    dimension->update();
+    CHECK(dimension->count() > 1);
+    CHECK_FALSE(dimension->hasImportedDisplay());
 }

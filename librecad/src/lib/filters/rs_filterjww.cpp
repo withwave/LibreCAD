@@ -25,7 +25,12 @@
 **********************************************************************/
 
 #include <QRegularExpression>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QByteArray>
 #include <QStringConverter>
+#else
+#include <QTextCodec>
+#endif
 
 #include <QFile>
 #include <QFileInfo>
@@ -59,6 +64,38 @@
 #include "rs_math.h"
 #include "rs_debug.h"
 
+namespace {
+QString decodeWithCodePage(const std::string& text, const QString& encoding)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const auto qEncoding = QStringConverter::encodingForName(encoding.toLatin1());
+    if (qEncoding) {
+        QStringDecoder decoder{*qEncoding};
+        return decoder(QByteArray::fromRawData(text.data(), qsizetype(text.size())));
+    }
+#else
+    QTextCodec* codec = QTextCodec::codecForName(encoding.toLatin1());
+    if (codec != nullptr) {
+        return codec->toUnicode(text.c_str());
+    }
+#endif
+    // The requested codec is unavailable. JWW is a Japanese format whose
+    // file bytes are Shift-JIS — falling through to `fromStdString` (which
+    // is `fromUtf8` on Qt 6) would mojibake any non-ASCII content. Try
+    // Shift-JIS explicitly before giving up.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    if (auto sjis = QStringConverter::encodingForName("Shift-JIS")) {
+        QStringDecoder dec{*sjis};
+        return dec(QByteArray::fromRawData(text.data(), qsizetype(text.size())));
+    }
+#else
+    if (QTextCodec* sjis = QTextCodec::codecForName("Shift-JIS")) {
+        return sjis->toUnicode(text.c_str());
+    }
+#endif
+    return QString::fromUtf8(text.data(), qsizetype(text.size()));
+}
+}
 
 /**
  * Default constructor.
@@ -212,10 +249,7 @@ void RS_FilterJWW::addBlock(const DL_BlockData& data) {
                         QString enc = RS_System::getEncoding(
                                                                 variables.getString("$DWGCODEPAGE", "ANSI_1252"));
                         // get the codec for Japanese
-                        QString blName = data.name.c_str();
-                        std::optional<QStringConverter::Encoding> encoding = QStringConverter::encodingForName(enc.toLatin1());
-                        if(encoding)
-                                blName = QStringEncoder{QStringEncoder::Utf8}(QString::fromStdString(data.name));
+                        QString blName = decodeWithCodePage(data.name, enc);
 //////////////////////////////
                         RS_Block* block =
                                 new RS_Block(graphic,
@@ -464,7 +498,7 @@ void RS_FilterJWW::addInsert(const DL_InsertData& data) {
                                         RS2::NoUpdate);
         RS_Insert* entity = new RS_Insert(currentContainer, d);
         setEntityAttributes(entity, attributes);
-        RS_DEBUG->print("  id: %lu", entity->getId());
+        RS_DEBUG->Log() << "  id: " << entity->getId();
         //entity->update();
         currentContainer->addEntity(entity);
 }
@@ -1250,7 +1284,10 @@ bool RS_FilterJWW::fileExport(RS_Graphic& g, const QString& file, RS2::FormatTyp
 
         // Line types:
         RS_DEBUG->print("writing line types...");
-        int numLT = (int)RS2::BorderLineX2-(int)RS2::LineByBlock;
+        // RS2::LineTypeUnchanged and RS2::LineSelected sit between the two
+        // blocks and are UI-only, so the table is written as two ranges.
+        int numLT = (int)RS2::BorderLineX2-(int)RS2::LineByBlock
+                  + (int)RS2::HiddenLineX2-(int)RS2::HiddenLine+1;
         if (type==RS2::FormatJWC) {
                 numLT-=2;
         }
@@ -1259,6 +1296,9 @@ bool RS_FilterJWW::fileExport(RS_Graphic& g, const QString& file, RS2::FormatTyp
                 if ((RS2::LineType)t!=RS2::NoPen) {
                         writeLineType(*dw, (RS2::LineType)t);
                 }
+        }
+        for (int t=(int)RS2::HiddenLine; t<=(int)RS2::HiddenLineX2; ++t) {
+                writeLineType(*dw, (RS2::LineType)t);
         }
         dw->tableEnd();
 
@@ -1305,7 +1345,7 @@ bool RS_FilterJWW::fileExport(RS_Graphic& g, const QString& file, RS2::FormatTyp
 
                 for (unsigned i=0; i<graphic->countBlocks(); ++i) {
                         RS_Block* blk = graphic->blockAt(i);
-                        if (!blk->isUndone())
+                        if (!blk->isDeleted())
                             jww.writeBlockRecord(*dw,
                                 std::string((const char*)blk->getName().toLocal8Bit().data()));
                         /*
@@ -1352,7 +1392,7 @@ bool RS_FilterJWW::fileExport(RS_Graphic& g, const QString& file, RS2::FormatTyp
                 // Careful: other blocks with * / $ exist
                 //if (blk->getName().at(0)!='*' &&
                 //		blk->getName().at(0)!='$') {
-                if (!blk->isUndone())
+                if (!blk->isDeleted())
                     writeBlock(*dw, blk);
                 //}
         }
@@ -1583,7 +1623,7 @@ void RS_FilterJWW::writeEntity(DL_WriterA& dw, RS_Entity* e) {
 void RS_FilterJWW::writeEntity(DL_WriterA& dw, RS_Entity* e,
                                                            const DL_Attributes& attrib) {
 
-		if (!e || e->getFlag(RS2::FlagUndone)) {
+		if (!e || e->getFlag(RS2::FlagDeleted)) {
                 return;
         }
         RS_DEBUG->print("writing Entity");
@@ -2423,7 +2463,7 @@ void RS_FilterJWW::writeAtomicEntities(DL_WriterA& dw, RS_EntityContainer* c,
  * Writes an IMAGEDEF object into an OBJECT section.
  */
 void RS_FilterJWW::writeImageDef(DL_WriterA& dw, RS_Image* i) {
-		if (!i || i->getFlag(RS2::FlagUndone)) {
+		if (!i || i->getFlag(RS2::FlagDeleted)) {
                 return;
         }
 
@@ -2470,10 +2510,7 @@ void RS_FilterJWW::setEntityAttributes(RS_Entity* entity,
                 QString enc = RS_System::getEncoding(
                                                         variables.getString("$DWGCODEPAGE", "ANSI_1252"));
                 // get the codec for Japanese
-                QString lName = attrib.getLayer().c_str();
-                auto encoding = QStringConverter::encodingForName(enc.toLatin1());
-                if(encoding)
-                        lName = QStringEncoder{QStringEncoder::Utf8}(QString::fromStdString(attrib.getLayer()));
+                QString lName = decodeWithCodePage(attrib.getLayer(), enc);
 				if (!graphic->findLayer(lName)) {
                         addLayer(DL_LayerData(attrib.getLayer(), 0));
                 }
@@ -2724,14 +2761,23 @@ RS2::LineType RS_FilterJWW::nameToLineType(const QString& name) {
 
 
         } else if (uName=="ACAD_ISO02W100" || uName=="ACAD_ISO03W100" ||
-                           uName=="DASHED" || uName=="HIDDEN") {
+                           uName=="DASHED") {
                 return RS2::DashLine;
 
-        } else if (uName=="DASHED2" || uName=="HIDDEN2") {
+        } else if (uName=="DASHED2") {
                 return RS2::DashLine2;
 
-        } else if (uName=="DASHEDX2" || uName=="HIDDENX2") {
+        } else if (uName=="DASHEDX2") {
                 return RS2::DashLineX2;
+
+        } else if (uName=="HIDDEN") {
+                return RS2::HiddenLine;
+
+        } else if (uName=="HIDDEN2") {
+                return RS2::HiddenLine2;
+
+        } else if (uName=="HIDDENX2") {
+                return RS2::HiddenLineX2;
 
 
         } else if (uName=="ACAD_ISO10W100" ||
@@ -2811,6 +2857,16 @@ QString RS_FilterJWW::lineTypeToName(RS2::LineType lineType) {
                 break;
         case RS2::DashLineX2:
                 return "DASHEDX2";
+                break;
+
+        case RS2::HiddenLine:
+                return "HIDDEN";
+                break;
+        case RS2::HiddenLine2:
+                return "HIDDEN2";
+                break;
+        case RS2::HiddenLineX2:
+                return "HIDDENX2";
                 break;
 
         case RS2::DashDotLine:
@@ -3067,9 +3123,7 @@ QString RS_FilterJWW::toNativeString(const char* data, const QString& encoding) 
      *	  the string through a textcoder.
      *	--------------------------------------------------------------------- */
     if (!res.contains("\\U+")) {
-        auto qEncoding = QStringConverter::encodingForName(encoding.toLatin1());
-        if (qEncoding)
-            res = QStringEncoder{QStringEncoder::Utf8}(data);
+        res = decodeWithCodePage(data, encoding);
     }
 
     // Line feed:

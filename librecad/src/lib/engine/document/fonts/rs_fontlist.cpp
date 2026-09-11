@@ -24,45 +24,44 @@
 **
 **********************************************************************/
 
-#include <iostream>
+#include "rs_fontlist.h"
+#include <QResource>
 
 #include <QFileInfo>
 #include <QLocale>
-#include <QResource>
 #include <QString>
-#include <QStringList>
+#include <iostream>
 
 #include "rs_debug.h"
 #include "rs_font.h"
-#include "rs_fontlist.h"
 #include "rs_system.h"
 
-RS_FontList* RS_FontList::uniqueInstance = nullptr;
+RS_FontList* RS_FontList::m_uniqueInstance = nullptr;
 
 RS_FontList* RS_FontList::instance() {
-	if (!uniqueInstance) {
-		uniqueInstance = new RS_FontList();
-	}
-	return uniqueInstance;
+    if (m_uniqueInstance == nullptr) {
+        m_uniqueInstance = new RS_FontList();
+    }
+    return m_uniqueInstance;
 }
 
-
 /**
- * Initializes the font list by creating empty RS_Font 
+ * Initializes the font list by creating empty RS_Font
  * objects, one for each font that could be found.
  */
 void RS_FontList::init() {
+    Q_INIT_RESOURCE(fallback_fonts);
     RS_DEBUG->print("RS_FontList::initFonts");
 
     QStringList list = RS_SYSTEM->getNewFontList();
     list.append(RS_SYSTEM->getFontList());
     QHash<QString, int> added; //used to remember added fonts (avoid duplication)
 
-    for (int i = 0; i < list.size(); ++i) {
-        RS_DEBUG->print(RS_Debug::D_ERROR, "font: %s:", list.at(i).toLatin1().data());
+    for (const auto& i : list) {
+        RS_DEBUG->print(RS_Debug::D_ERROR, "font: %s:", i.toLatin1().data());
 
-        QFileInfo fi( list.at(i) );
-        if ( !added.contains(fi.baseName()) ) {
+        QFileInfo fi(i);
+        if (!added.contains(fi.baseName())) {
             m_fonts.emplace_back(new RS_Font(fi.baseName()));
             added.insert(fi.baseName(), 1);
         }
@@ -71,17 +70,15 @@ void RS_FontList::init() {
     }
 }
 
-size_t RS_FontList::countFonts() const{
+size_t RS_FontList::countFonts() const {
     return m_fonts.size();
 }
 
-std::vector<std::unique_ptr<RS_Font> >::const_iterator RS_FontList::begin() const
-{
+std::vector<std::unique_ptr<RS_Font>>::const_iterator RS_FontList::begin() const {
     return m_fonts.begin();
 }
 
-std::vector<std::unique_ptr<RS_Font> >::const_iterator RS_FontList::end() const
-{
+std::vector<std::unique_ptr<RS_Font>>::const_iterator RS_FontList::end() const {
     return m_fonts.end();
 }
 
@@ -138,35 +135,34 @@ RS_Font* RS_FontList::requestFont(const QString& name) {
 
 
 QString RS_FontList::getDefaultFont() {
-    QLocale loc = QLocale::system();
-    QLocale::Script script = loc.script();
+    const QLocale loc = QLocale::system();
+    const QLocale::Script script = loc.script();
 
     switch (script) {
-    case QLocale::ArabicScript:
-        return "amiri-regular";
-    case QLocale::CyrillicScript:
-        return "OpenGostTypeA-Regular";
-    case QLocale::GreekScript:
-        return "greeks";
-    case QLocale::JapaneseScript:
-        return "kochigothic";
-    case QLocale::HangulScript:
-        return "kst32b";
-    case QLocale::SimplifiedHanScript:
-    case QLocale::TraditionalHanScript:
-        return "unicode";
-    default:
-        return "unicode";
+        case QLocale::ArabicScript:
+            return "amiri-regular";
+        case QLocale::CyrillicScript:
+            return "OpenGostTypeA-Regular";
+        case QLocale::GreekScript:
+            return "greeks";
+        case QLocale::JapaneseScript:
+            return "kochigothic";
+        case QLocale::HangulScript:
+            return "kst32b";
+        case QLocale::SimplifiedHanScript:
+        case QLocale::TraditionalHanScript:
+            return "unicode";
+        default:
+            return "unicode";
     }
 }
 
 /**
  * Dumps the m_fonts to stdout.
  */
-std::ostream& operator << (std::ostream& os, RS_FontList& l) {
-
+std::ostream& operator <<(std::ostream& os, const RS_FontList& l) {
     os << "Fontlist: \n";
-    for(auto const& f: l.m_fonts){
+    for (const auto& f : l.m_fonts) {
         os << *f << "\n";
     }
 

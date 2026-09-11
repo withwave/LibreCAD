@@ -25,28 +25,31 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <QPageSize>
 #include <QPageLayout>
+#include <QMarginsF>
+class QWidget;
+#include <QPrinter>
 
 #include "rs.h"
+#include "rs_vector.h"
 
 class RS_Graphic;
-class QWidget;
 class QC_MDIWindow;
 // fixme - sand - files - move to proper place outside of /lib !!!
 namespace LC_Printing
 {
-    // All margins are millimetres; preserve at least 2.5 mm and driver minima.
     QMarginsF printableMargins(QPageLayout layout, const QMarginsF& requested);
     bool applyPrinterMargins(RS_Graphic& graphic, QWidget* parent = nullptr, bool choosePrinter = false);
-
     enum class PrinterType { Printer, PDF };
-    QPageSize::PageSizeId rsToQtPaperFormat(RS2::PaperFormat f);
+    QPageSize::PageSizeId rsToQtPaperFormat(RS2::PaperFormat paperFormat);
+    void setupPageLayout(QPrinter& printer, bool landscape, QPageSize::PageSizeId paperSizeName,
+                         const RS_Vector& paperSize, RS2::Unit unit, const QMarginsF& paperMargins);
 
     /**
      * @brief Print - the implementation of drawing printing
      * @param mdiWindow - the mdiWindow to print
      * @param printerType - whether printing to a printer or a PDF file
      */
-    void Print(QC_MDIWindow &mdiWindow, PrinterType printerType);
+    void print(QC_MDIWindow &mdiWindow, PrinterType printerType);
 }
 
-#endif // LC_PRINTING_H
+#endif
