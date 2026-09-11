@@ -554,6 +554,12 @@ RS_Block* RS_Font::findLetter(const QString& name) {
     }
     QFont systemFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
     systemFont.setPixelSize(100);
+    // These outlines are stroked with the entity's CAD line weight rather than
+    // filled. A light Hangul face avoids two widely separated contour strokes
+    // looking bold next to single-stroke LFF letters.
+    if (name.front().script() == QChar::Script_Hangul) {
+        systemFont.setWeight(QFont::Thin);
+    }
     QFontMetricsF metrics(systemFont);
     if (!metrics.inFontUcs4(name.toUcs4().first()) || metrics.capHeight() <= 0.) {
         return nullptr;
@@ -561,7 +567,25 @@ RS_Block* RS_Font::findLetter(const QString& name) {
     QPainterPath outline;
     outline.addText(QPointF(0., 0.), systemFont, name);
     if (outline.isEmpty()) return nullptr;
-    const double scale = 9. / metrics.capHeight();
+    // A Latin cap height is not the cap height of the substituted CJK font.
+    // Hangul uses one shared reference cell, including its below-baseline ink,
+    // so all syllables retain their relative sizes and sit on the CAD baseline.
+    // Normalizing each syllable separately would incorrectly enlarge short
+    // syllables such as 트. Other ideographic scripts retain their em square.
+    const auto script = name.front().script();
+    const bool emSquare = script == QChar::Script_Hangul || script == QChar::Script_Han ||
+                          script == QChar::Script_Hiragana || script == QChar::Script_Katakana;
+    double referenceHeight = emSquare ? systemFont.pixelSize() : metrics.capHeight();
+    if (script == QChar::Script_Hangul) {
+        QPainterPath reference;
+        reference.addText(QPointF(0., 0.), systemFont, QString::fromUtf8("가"));
+        const QRectF cell = reference.boundingRect();
+        if (cell.height() > 0.) {
+            referenceHeight = cell.height();
+            outline.translate(0., -cell.bottom());
+        }
+    }
+    const double scale = 9. / referenceHeight;
     const auto polygons = outline.toSubpathPolygons(QTransform::fromScale(scale, -scale));
     auto letter = std::make_unique<RS_FontChar>(nullptr, name, RS_Vector(0., 0.));
     for (const auto& polygon : polygons) {

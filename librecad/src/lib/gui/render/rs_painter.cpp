@@ -1351,22 +1351,11 @@ void RS_Painter::drawEntityPolyline(const RS_Polyline* polyline) {
             }
             // well, actually this is just for fonts.. better to have separate entity for this. fixme - change latter
             case RS2::EntityEllipse: {
-                // fixme - coordinates translation
-
-                // !! FIXME - sand - why not the same path of the polyline is used??
-                const auto* arc = static_cast<RS_Ellipse*>(entity);
-                const RS_EllipseData& data = arc->getData();
-                const RS_Vector uiCenter = toGui(data.center);
-
-                const double uiMajorRadius = toGuiDX(data.majorP.magnitude()); // fixme - sand - render - cache?
-                const double uiMinorRadius = data.ratio * uiMajorRadius;
-                if (data.isArc) {
-                    drawEllipseArcUI(uiCenter, {uiMajorRadius, uiMinorRadius}, toWorldAngleDegrees(data.angleDegrees), /*view.toWorldAngleDegrees(*/data.startAngleDegrees/*)*/,
-                                    data.angularLength, data.reversed);
-                }
-                else {
-                    drawEllipseUI(uiCenter, {uiMajorRadius, uiMinorRadius}, toWorldAngleDegrees(data.angleDegrees));
-                }
+                // Width-scaled font bulges become elliptic arcs. Use the same
+                // live geometry and WCS/UCS conversion as standalone ellipses:
+                // data.startAngleDegrees already swaps reversed endpoints, so
+                // passing it with reversed=true used to reverse the start twice.
+                static_cast<RS_Ellipse*>(entity)->draw(this);
                 break;
             }
             default: LC_ERR << "Polyline may contain lines/arcs only: found rtti() =" << entity->rtti();

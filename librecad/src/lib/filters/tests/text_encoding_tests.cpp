@@ -101,6 +101,10 @@ TEST_CASE("System font supplies missing Hangul CAD glyphs", "[encoding][fonts]")
         CHECK(glyph->countDeep() > 0);
         CHECK(glyph->getSize().x > 0.);
         CHECK(glyph->getSize().y > 0.);
+        // The nominal CAD cap height is 9. Hangul uses a shared reference cell,
+        // not the smaller Latin cap-height metric or a per-syllable ink height.
+        CHECK(glyph->getSize().x <= 9. + 1.e-9);
+        CHECK(glyph->getSize().y <= 9. + 1.e-9);
         CHECK(font->findLetter(QString(ch)) == glyph); // cached outlines
     }
 }

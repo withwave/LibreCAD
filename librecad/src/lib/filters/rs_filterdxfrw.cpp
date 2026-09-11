@@ -96,6 +96,8 @@
 #include "rs_dimlinear.h"
 #include "rs_dimradial.h"
 #include "rs_ellipse.h"
+#include "rs_font.h"
+#include "rs_fontlist.h"
 #include "rs_filterdxfrw.h"
 #include "rs_settings.h"
 #include "rs_graphicview.h"
@@ -3906,6 +3908,7 @@ bool RS_FilterDXFRW::fileImport(RS_Graphic &g, const QString &file,
   // (and, for m_blockHash, potentially dangling) state across imports. XREF
   // sub-imports use a separate child filter, so this never wipes parent state.
   m_blockHash.clear();
+  m_readingDwg = false;
   m_dimensionGraphics.clear();
   m_importLayerCache.clear();
   m_importLayerRawCache.clear();
@@ -3918,6 +3921,7 @@ bool RS_FilterDXFRW::fileImport(RS_Graphic &g, const QString &file,
       type == RS2::FormatDWG2007 || type == RS2::FormatDWG2010 ||
       type == RS2::FormatDWG2013 || type == RS2::FormatDWG2018) {
     const int magicVersion = versionIdFromDwgMagic(file);
+    m_readingDwg = true;
     if (magicVersion != 0)
       m_version = magicVersion;
 
@@ -7951,6 +7955,34 @@ void RS_FilterDXFRW::addText(const DRW_Text &data) {
     appendTypeSidecar(entity, kTextOcsMarker, std::move(payload));
   }
   entity->update();
+  // DWG writers can retain the evaluated left/baseline point alongside the
+  // center/right alignment point. When substituting a missing font, preserve
+  // that cached horizontal footprint instead of moving both ends inward. DXF
+  // permits an unused/zero first point: never infer cached extents from it.
+  // Reject stale DWG points unless their local vertical offset agrees with the
+  // nominal TEXT alignment. Editing regenerates geometry from source parameters.
+  if (m_readingDwg && data.textgen == 0 && data.height > RS_TOLERANCE &&
+      (data.alignH == DRW_Text::HCenter || data.alignH == DRW_Text::HRight) &&
+      (data.alignV == DRW_Text::VBaseLine || data.alignV == DRW_Text::VMiddle ||
+       data.alignV == DRW_Text::VTop)) {
+    const auto* style = m_graphic->dwgAdvancedMetadata().findTextStyleTableEntryByName(data.style);
+    auto* font = RS_FONTLIST->requestFontForStyle(sty, m_graphic);
+    if (style != nullptr && font != nullptr && !style->font.empty()) {
+      QString sourceFont = QString::fromUtf8(style->font.c_str());
+      sourceFont.replace('\\', '/');
+      sourceFont = QFileInfo(sourceFont).completeBaseName();
+      const QString renderedFont = QFileInfo(font->getFileName()).completeBaseName();
+      const auto delta = (RS_Vector(data.secPoint.x, data.secPoint.y) -
+                          RS_Vector(data.basePoint.x, data.basePoint.y)).rotate(-d.angle);
+      const double verticalOffset = data.alignV == DRW_Text::VMiddle ? data.height * .5 :
+                                    data.alignV == DRW_Text::VTop ? data.height : 0.;
+      if (sourceFont.compare(renderedFont, Qt::CaseInsensitive) != 0 &&
+          delta.x > RS_TOLERANCE &&
+          std::abs(delta.y - verticalOffset) <= data.height * 1.e-6) {
+        entity->fitImportedDisplayWidth(delta.x * (data.alignH == DRW_Text::HCenter ? 2. : 1.));
+      }
+    }
+  }
   m_currentContainer->addEntity(entity);
 }
 

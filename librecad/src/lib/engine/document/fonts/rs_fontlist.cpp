@@ -34,6 +34,7 @@
 
 #include "rs_debug.h"
 #include "rs_font.h"
+#include "rs_graphic.h"
 #include "rs_system.h"
 
 RS_FontList* RS_FontList::m_uniqueInstance = nullptr;
@@ -120,6 +121,12 @@ RS_Font* RS_FontList::requestFont(const QString& name) {
         }
     }
 
+    // Legacy TXT is a stroke font. Simplex preserves its short, shallow
+    // underscore and text proportions better than the ISO default. Prefer an
+    // actual installed TXT above; this substitution is only for a missing font.
+    if (name2 == "txt") {
+        return requestFont("simplex");
+    }
     if (name2 != "standard") {
         return requestFont("standard");
     }
@@ -133,6 +140,22 @@ RS_Font* RS_FontList::requestFont(const QString& name) {
     return m_fallbackFont->loadFont() ? m_fallbackFont.get() : nullptr;
 }
 
+
+RS_Font* RS_FontList::requestFontForStyle(const QString& style, const RS_Graphic* graphic) {
+    // STYLE names are document-local identifiers, not font file names. Resolve
+    // them at rendering time so editing/export still retains the original style.
+    if (graphic != nullptr) {
+        const auto* entry = graphic->dwgAdvancedMetadata().findTextStyleTableEntryByName(
+            style.toUtf8().toStdString());
+        if (entry != nullptr && !entry->font.empty()) {
+            QString name = QString::fromUtf8(entry->font.c_str());
+            name.replace('\\', '/');
+            name = QFileInfo(name).completeBaseName();
+            return requestFont(name);
+        }
+    }
+    return requestFont(style);
+}
 
 QString RS_FontList::getDefaultFont() {
     const QLocale loc = QLocale::system();

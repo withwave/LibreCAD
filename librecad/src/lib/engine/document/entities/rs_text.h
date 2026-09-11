@@ -253,6 +253,10 @@ public:
         return m_usedTextWidth;
     }
 
+    // Fit a missing-font display to a validated, cached import width without
+    // changing the source TEXT parameters. A normal update regenerates it.
+    void fitImportedDisplayWidth(double width);
+
     double getUsedTextHeight() const {
         return m_usedTextHeight;
     }

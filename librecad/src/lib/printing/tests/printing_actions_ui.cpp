@@ -32,6 +32,9 @@ int main(int argc, char **argv) {
     app.setQuitOnLastWindowClosed(false);
     RS_DEBUG->setLevel(RS_Debug::D_NOTHING);
     RS_Settings::init("LibreCAD", "LibreCAD-print-action-regression");
+    if (const QString fonts = qEnvironmentVariable("LIBRECAD_PRINTING_TEST_FONTS"); !fonts.isEmpty()) {
+        LC_SET_ONE("Paths", "Fonts", fonts);
+    }
     RS_SYSTEM->init("LibreCAD", "test", "librecad", argv[0]);
     RS_FONTLIST->init();
     auto &window = QC_ApplicationWindow::getAppWindow();

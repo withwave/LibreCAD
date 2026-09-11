@@ -270,6 +270,19 @@ int RS_Text::getNumberOfLines() const {
  * text or it's m_data, position, alignment, .. changes.
  * This method also updates the usedTextWidth / usedTextHeight property.
  */
+void RS_Text::fitImportedDisplayWidth(double width) {
+    if (!std::isfinite(width) || width <= RS_TOLERANCE ||
+        m_usedTextWidth <= RS_TOLERANCE) {
+        return;
+    }
+    const RS_Vector anchor = m_data.insertionPoint;
+    RS_EntityContainer::rotate(anchor, -m_data.angle);
+    RS_EntityContainer::scale(anchor, RS_Vector(width / m_usedTextWidth, 1.));
+    RS_EntityContainer::rotate(anchor, m_data.angle);
+    forcedCalculateBorders();
+    m_usedTextWidth = width;
+}
+
 void RS_Text::update() {
     RS_DEBUG->print("RS_Text::update");
 
@@ -282,7 +295,7 @@ void RS_Text::update() {
     m_usedTextWidth = 0.0;
     m_usedTextHeight = 0.0;
 
-    RS_Font* font = RS_FONTLIST->requestFont(m_data.style);
+    RS_Font* font = RS_FONTLIST->requestFontForStyle(m_data.style, getGraphic());
 
     if (font == nullptr) {
         return;

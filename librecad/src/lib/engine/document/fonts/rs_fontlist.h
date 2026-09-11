@@ -30,6 +30,7 @@
 
 class QString;
 class RS_Font;
+class RS_Graphic;
 
 #define RS_FONTLIST RS_FontList::instance()
 
@@ -54,6 +55,7 @@ public:
     void clearFonts();
     size_t countFonts() const;
     RS_Font* requestFont(const QString& name);
+    RS_Font* requestFontForStyle(const QString& style, const RS_Graphic* graphic);
     std::vector<std::unique_ptr<RS_Font> >::const_iterator begin() const;
     std::vector<std::unique_ptr<RS_Font> >::const_iterator end() const;
     static QString getDefaultFont();

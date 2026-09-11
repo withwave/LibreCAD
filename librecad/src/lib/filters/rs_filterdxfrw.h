@@ -3134,6 +3134,7 @@ private:
   std::map<QString, std::vector<std::uint32_t>> m_dxfBlockInsertHandles;
   QHash<QString, QString> m_fontList;
   bool m_oldMText = false;
+  bool m_readingDwg = false;
   dxfRW *m_dxfW{nullptr};
   dxfRW *m_dxfR{nullptr};
 #ifdef DWGSUPPORT

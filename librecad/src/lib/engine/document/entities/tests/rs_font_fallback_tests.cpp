@@ -5,6 +5,7 @@
 #include <functional>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QImage>
 
 #include "rs_block.h"
 #include "rs_dimension.h"
@@ -17,6 +18,11 @@
 #include "rs_line.h"
 #include "rs_mtext.h"
 #include "rs_settings.h"
+#include "rs_text.h"
+#include "rs_ellipse.h"
+#include "rs_polyline.h"
+#include "rs_painter.h"
+#include "lc_graphicviewport.h"
 
 namespace {
 // Exercise the same state as an installation with no external font files.
@@ -42,6 +48,37 @@ TEST_CASE("Missing CAD fonts retain dimension glyphs", "[fonts][fallback]") {
             REQUIRE(glyph != nullptr);
             CHECK(glyph != font->findLetter(QString(QChar(0xfffd))));
             CHECK(glyph->countDeep() > 0);
+        }
+    }
+}
+
+TEST_CASE("Width-scaled font ellipse strokes render like standalone arcs", "[fonts][render]") {
+    LC_GraphicViewport viewport;
+    viewport.setSize(200, 200);
+    viewport.setOffsetAndFactor(100, 100, 10.);
+    for (bool reversed : {false, true}) {
+        for (double rotation : {0., .6}) {
+            RS_Ellipse arc(nullptr, {{0., 0.}, {5., 0.}, .6, .2, 2.5, reversed});
+            arc.rotate({}, rotation);
+            RS_Polyline polyline(nullptr, RS_PolylineData());
+            polyline.RS_EntityContainer::addEntity(arc.clone());
+            polyline.updateEndpoints();
+            auto render = [&](bool asPolyline) {
+                QImage result(200, 200, QImage::Format_ARGB32_Premultiplied);
+                result.fill(Qt::white);
+                RS_Painter painter(&result);
+                painter.setViewPort(&viewport);
+                painter.setPen(0, 0, 0);
+                if (asPolyline) polyline.draw(&painter);
+                else arc.draw(&painter);
+                painter.end();
+                return result;
+            };
+            const QImage expected = render(false);
+            QImage blank(expected.size(), expected.format());
+            blank.fill(Qt::white);
+            REQUIRE(expected != blank);
+            CHECK(render(true) == expected);
         }
     }
 }
@@ -92,6 +129,26 @@ TEST_CASE("Installed font takes priority and load failure falls back", "[fonts][
     CHECK(fallback->findLetter("1")->countDeep() > 0);
 }
 
+TEST_CASE("Missing TXT uses Simplex while an installed TXT retains priority", "[fonts][fallback]") {
+    NoInstalledFonts fonts;
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    struct Paths {
+        QString previous = LC_GET_ONE_STR("Paths", "Fonts", "");
+        ~Paths() { LC_SET_ONE("Paths", "Fonts", previous); }
+    } paths;
+    LC_SET_ONE("Paths", "Fonts", directory.path());
+    REQUIRE(QFile::copy(":/fonts/standard.lff", directory.filePath("simplex.lff")));
+    RS_FONTLIST->init();
+    REQUIRE(RS_FONTLIST->requestFont("TXT") != nullptr);
+    CHECK(RS_FONTLIST->requestFont("TXT")->getFileName() == "simplex");
+    REQUIRE(QFile::copy(":/fonts/standard.lff", directory.filePath("txt.lff")));
+    RS_FONTLIST->clearFonts();
+    RS_FONTLIST->init();
+    REQUIRE(RS_FONTLIST->requestFont("txt") != nullptr);
+    CHECK(RS_FONTLIST->requestFont("txt")->getFileName() == "txt");
+}
+
 TEST_CASE("Blank MTEXT does not extend drawing bounds to the origin", "[fonts][fallback]") {
     NoInstalledFonts fonts;
     RS_Graphic graphic;
@@ -126,7 +183,20 @@ TEST_CASE("Wheel DWG dimensions render without installed fonts", "[.font-dwg]") 
     graphic.onLoadingCompleted();
     int dimensions = 0;
     int labels = 0;
+    int titles = 0;
     for (auto* entity : graphic) {
+        if (auto* text = dynamic_cast<RS_Text*>(entity);
+            text && text->getText() == "Rear_Wheel_10_12 Hole") {
+            ++titles;
+            // DWG evaluated left point: 15874.3; alignment center: 15922.2.
+            // Preserve the roughly 96-unit footprint even without txt.shx.
+            CHECK(text->getUsedTextWidth() > 95.);
+            CHECK(text->getUsedTextWidth() < 97.);
+            CHECK(text->getMin().x > 15874.);
+            CHECK(text->getMin().x < 15875.);
+            CHECK(text->getWidthRel() == Catch::Approx(1.));
+            CHECK(text->getHeight() == Catch::Approx(5.));
+        }
         auto* dimension = dynamic_cast<RS_Dimension*>(entity);
         if (!dimension) continue;
         ++dimensions;
@@ -149,11 +219,58 @@ TEST_CASE("Wheel DWG dimensions render without installed fonts", "[.font-dwg]") 
     CAPTURE(dimensions, labels);
     CHECK(dimensions == 22);
     CHECK(labels == dimensions);
+    CHECK(titles == 3);
     graphic.calculateBorders();
     CHECK(graphic.getSize().x > 100.);
     CHECK(graphic.getSize().x < 1000.);
     CHECK(graphic.getSize().y > 200.);
     CHECK(graphic.getSize().y < 1000.);
+}
+
+TEST_CASE("Imported fallback text footprint preserves source parameters and resets on editing",
+          "[fonts][fallback]") {
+    NoInstalledFonts fonts;
+    RS_TextData data({100., 200.}, {}, 5., 1., RS_TextData::VAMiddle,
+                     RS_TextData::HACenter, RS_TextData::None, "ABC", "missing",
+                     .4, RS2::Update);
+    RS_Text text(nullptr, data);
+    const double originalWidth = text.getUsedTextWidth();
+    text.fitImportedDisplayWidth(originalWidth * 1.5);
+    CHECK(text.getUsedTextWidth() == Catch::Approx(originalWidth * 1.5));
+    CHECK(text.getWidthRel() == Catch::Approx(1.));
+    CHECK(text.getHeight() == Catch::Approx(5.));
+    CHECK(text.getAngle() == Catch::Approx(.4));
+    CHECK(text.getInsertionPoint().x == Catch::Approx(100.));
+    CHECK(text.getInsertionPoint().y == Catch::Approx(200.));
+    text.update();
+    CHECK(text.getUsedTextWidth() == Catch::Approx(originalWidth));
+}
+
+TEST_CASE("Document text styles resolve their font without losing style names", "[fonts][fallback]") {
+    NoInstalledFonts fonts;
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    REQUIRE(QFile::copy(":/fonts/standard.lff", directory.filePath("drawing-font.lff")));
+    struct Paths {
+        QString previous = LC_GET_ONE_STR("Paths", "Fonts", "");
+        ~Paths() { LC_SET_ONE("Paths", "Fonts", previous); }
+    } paths;
+    LC_SET_ONE("Paths", "Fonts", directory.path());
+    RS_FONTLIST->init();
+    RS_Graphic graphic;
+    DRW_Textstyle style;
+    style.name = "DS";
+    style.font = "C:\\CAD\\DRAWING-FONT.shx";
+    graphic.dwgAdvancedMetadata().addTextStyleName(style);
+    auto* resolved = RS_FONTLIST->requestFontForStyle("ds", &graphic);
+    REQUIRE(resolved != nullptr);
+    CHECK(resolved->getFileName() == "drawing-font");
+    CHECK(RS_FONTLIST->requestFontForStyle("DS", nullptr)->getFileName() == ":/fonts/standard.lff");
+    RS_TextData data({}, {}, 5., 1., RS_TextData::VABaseline, RS_TextData::HALeft,
+                     RS_TextData::None, "ABC", "DS", 0., RS2::Update);
+    RS_Text text(&graphic, data);
+    CHECK(text.getStyle() == "DS");
+    CHECK(text.getUsedTextWidth() > 0.);
 }
 
 TEST_CASE("Automatic dimension symbols preserve explicit labels", "[fonts][dimension]") {

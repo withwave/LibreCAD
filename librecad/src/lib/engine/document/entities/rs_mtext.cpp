@@ -545,7 +545,7 @@ void RS_MText::update() {
         return;
     }
 
-    RS_Font* font{RS_FONTLIST->requestFont(m_data.style)};
+    RS_Font* font{RS_FONTLIST->requestFontForStyle(m_data.style, getGraphic())};
     if (nullptr == font) {
         return;
     }
@@ -825,7 +825,7 @@ void RS_MText::flushBidiLine(LC_TextLine &oneLine,
       RS_Font *segFont = seg.font;
       if (segFont == nullptr) {
         // Fallback: should not normally happen, but stay defensive.
-        segFont = RS_FONTLIST->requestFont(m_data.style);
+        segFont = RS_FONTLIST->requestFontForStyle(m_data.style, getGraphic());
       }
       if (segFont != nullptr) {
         addLetter(oneLine, seg.codepoint, *segFont, letterSpace,
